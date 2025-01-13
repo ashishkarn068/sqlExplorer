@@ -46,38 +46,32 @@ app.get('/api/databases', async (req, res) => {
 
 // API endpoint to get tables for a database
 app.get('/api/tables/:database', async (req, res) => {
-  console.log('Fetching tables for database:', req.params.database);
-  
   try {
     const dbConfig = {
       ...config,
       database: req.params.database
     };
-    console.log('Using config:', dbConfig);
 
     const pool = await sql.connect(dbConfig);
-    console.log('Connected to database successfully');
+    
+    const result = await pool.request().query(`
+      SELECT 
+        t.TABLE_NAME as name,
+        c.COLUMN_NAME as column_name,
+        c.DATA_TYPE as data_type
+      FROM INFORMATION_SCHEMA.TABLES t
+      JOIN INFORMATION_SCHEMA.COLUMNS c 
+        ON t.TABLE_NAME = c.TABLE_NAME
+      WHERE t.TABLE_TYPE = 'BASE TABLE'
+        AND t.TABLE_CATALOG = '${req.params.database}'
+      ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION
+    `);
 
-    // Simpler query that doesn't use parameters
-    const result = await pool.request()
-      .query(`
-        SELECT 
-          t.TABLE_NAME as name,
-          c.COLUMN_NAME as column_name,
-          c.DATA_TYPE as data_type
-        FROM INFORMATION_SCHEMA.TABLES t
-        JOIN INFORMATION_SCHEMA.COLUMNS c 
-          ON t.TABLE_NAME = c.TABLE_NAME
-        WHERE t.TABLE_TYPE = 'BASE TABLE'
-          AND t.TABLE_CATALOG = '${req.params.database}'
-        ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION
-      `);
-
-    // Transform the data into the required format
+    // Transform the data
     const tables = [];
     let currentTable = null;
 
-    result.recordset.forEach(row => {
+    for (const row of result.recordset) {
       if (!currentTable || currentTable.name !== row.name) {
         if (currentTable) {
           tables.push(currentTable);
@@ -91,22 +85,16 @@ app.get('/api/tables/:database', async (req, res) => {
         name: row.column_name,
         type: row.data_type
       });
-    });
+    }
 
     if (currentTable) {
       tables.push(currentTable);
     }
 
-    console.log(`Found ${tables.length} tables in database ${req.params.database}`);
     res.json(tables);
-
   } catch (err) {
-    console.error('Detailed error:', err);
-    res.status(500).json({ 
-      error: err.message,
-      details: 'Error occurred while fetching tables',
-      database: req.params.database
-    });
+    console.error('Error:', err);
+    res.status(500).json({ error: err.message });
   } finally {
     await sql.close();
   }

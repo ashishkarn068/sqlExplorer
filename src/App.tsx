@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, IconButton, CssBaseline, Typography, FormControl, Select, MenuItem } from '@mui/material';
+import { Box, IconButton, CssBaseline, Typography, FormControl, Select, MenuItem, CircularProgress } from '@mui/material';
 import { Menu, Database as DatabaseIcon } from 'lucide-react';
 import LeftPanel from './components/LeftPanel';
 import QueryBuilder from './components/QueryBuilder';
@@ -15,6 +15,7 @@ function App() {
   const [databases, setDatabases] = useState<Database[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [columns, setColumns] = useState<any[]>([]);
+  const [isLoadingTables, setIsLoadingTables] = useState(false);
 
   useEffect(() => {
     const fetchDatabases = async () => {
@@ -34,6 +35,7 @@ function App() {
     setSelectedTable(null);
     setResults([]);
     setTables([]);
+    setIsLoadingTables(true);
     
     try {
       const response = await fetch(`http://localhost:3001/api/tables/${database}`);
@@ -42,7 +44,6 @@ function App() {
       }
       const data = await response.json();
       if (Array.isArray(data)) {
-        console.log('Fetched tables:', data);
         setTables(data);
       } else {
         console.error('Received invalid table data:', data);
@@ -51,6 +52,8 @@ function App() {
     } catch (error) {
       console.error('Error fetching tables:', error);
       setTables([]);
+    } finally {
+      setIsLoadingTables(false);
     }
   };
 
@@ -144,6 +147,31 @@ function App() {
     <Box sx={{ display: 'flex', height: '100vh' }}>
       <CssBaseline />
       
+      {/* Loading Overlay */}
+      {isLoadingTables && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            bgcolor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'column',
+            gap: 2
+          }}
+        >
+          <CircularProgress sx={{ color: 'white' }} />
+          <Typography sx={{ color: 'white' }}>
+            Loading tables...
+          </Typography>
+        </Box>
+      )}
+
       {/* Header with Toggle */}
       <Box sx={{ 
         position: 'fixed',
@@ -263,13 +291,16 @@ function App() {
         height: '100vh',
         marginLeft: 0,
         transition: 'margin-left 0.2s',
-        mt: '48px'
+        mt: '48px',
+        overflow: 'hidden'
       }}>
         {/* Query Builder Section */}
         <Box sx={{ 
           borderBottom: '1px solid #e2e8f0',
           bgcolor: '#f8fafc',
-          flex: '0 1 auto'
+          flex: '0 0 auto',
+          minWidth: 0,
+          overflow: 'auto'
         }}>
           <QueryBuilder
             tables={tables}
@@ -283,7 +314,8 @@ function App() {
         <Box sx={{ 
           flex: 1,
           overflow: 'auto',
-          py: 1
+          py: 1,
+          minWidth: 0
         }}>
           <ResultsGrid
             rows={results}
