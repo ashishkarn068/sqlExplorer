@@ -307,6 +307,7 @@ function App() {
             selectedTable={selectedTable}
             onTableChange={setSelectedTable}
             onQuerySubmit={handleQuerySubmit}
+            isLoading={loading}
           />
         </Box>
 

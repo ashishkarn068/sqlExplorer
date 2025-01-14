@@ -24,6 +24,7 @@ interface QueryBuilderProps {
   selectedTable: Table | null;
   onTableChange: (table: Table | null) => void;
   onQuerySubmit: (params: QueryParams) => void;
+  isLoading: boolean;
 }
 
 export default function QueryBuilder({
@@ -31,6 +32,7 @@ export default function QueryBuilder({
   selectedTable,
   onTableChange,
   onQuerySubmit,
+  isLoading
 }: QueryBuilderProps) {
   const [whereColumn, setWhereColumn] = useState('');
   const [whereValue, setWhereValue] = useState('');
@@ -251,12 +253,17 @@ export default function QueryBuilder({
           <Button
             variant="contained"
             onClick={handleSubmit}
+            disabled={isLoading}
             startIcon={<Search size={16} />}
             size="small"
             sx={{
               bgcolor: '#3b82f6',
               '&:hover': {
                 bgcolor: '#2563eb',
+              },
+              '&:disabled': {
+                bgcolor: '#94a3b8',
+                color: 'white'
               },
               height: '40px',  // More reasonable height
               alignSelf: 'flex-end',  // Align with the bottom of other components
@@ -267,7 +274,7 @@ export default function QueryBuilder({
               textTransform: 'none'  // Prevent all-caps
             }}
           >
-            Execute
+            {isLoading ? 'Executing...' : 'Execute'}
           </Button>
         </Box>
 
