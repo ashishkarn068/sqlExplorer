@@ -1,6 +1,7 @@
 const express = require('express');
 const sql = require('mssql/msnodesqlv8');
 const cors = require('cors');
+const DatabaseCache = require('./cache');
 require('dotenv').config();
 
 const app = express();
@@ -46,10 +47,21 @@ app.get('/api/databases', async (req, res) => {
 
 // API endpoint to get tables for a database
 app.get('/api/tables/:database', async (req, res) => {
+  const dbName = req.params.database;
+  console.log('Fetching tables for database:', dbName);
+  
   try {
+    // Check cache first
+    const cachedTables = DatabaseCache.getTables(dbName);
+    if (cachedTables) {
+      console.log('Returning cached tables for:', dbName);
+      return res.json(cachedTables);
+    }
+
+    // If not in cache, fetch from database
     const dbConfig = {
       ...config,
-      database: req.params.database
+      database: dbName
     };
 
     const pool = await sql.connect(dbConfig);
@@ -63,7 +75,7 @@ app.get('/api/tables/:database', async (req, res) => {
       JOIN INFORMATION_SCHEMA.COLUMNS c 
         ON t.TABLE_NAME = c.TABLE_NAME
       WHERE t.TABLE_TYPE = 'BASE TABLE'
-        AND t.TABLE_CATALOG = '${req.params.database}'
+        AND t.TABLE_CATALOG = '${dbName}'
       ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION
     `);
 
@@ -90,6 +102,10 @@ app.get('/api/tables/:database', async (req, res) => {
     if (currentTable) {
       tables.push(currentTable);
     }
+
+    // Store in cache
+    DatabaseCache.setTables(dbName, tables);
+    console.log(`Cached ${tables.length} tables for database:`, dbName);
 
     res.json(tables);
   } catch (err) {
@@ -181,6 +197,32 @@ app.get('/api/test-connection/:database', async (req, res) => {
       message: 'Connection failed', 
       error: error.message 
     });
+  }
+});
+
+// Add endpoint to clear cache if needed
+app.post('/api/cache/clear/:database?', (req, res) => {
+  const dbName = req.params.database;
+  if (dbName) {
+    DatabaseCache.clearDatabase(dbName);
+    res.json({ message: `Cache cleared for database: ${dbName}` });
+  } else {
+    DatabaseCache.clearAll();
+    res.json({ message: 'All cache cleared' });
+  }
+});
+
+// Add endpoint to refresh cache for a database
+app.post('/api/cache/refresh/:database', async (req, res) => {
+  const dbName = req.params.database;
+  DatabaseCache.clearDatabase(dbName);
+  
+  try {
+    const response = await fetch(`http://localhost:${process.env.PORT}/api/tables/${dbName}`);
+    const data = await response.json();
+    res.json({ message: `Cache refreshed for database: ${dbName}`, tables: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
