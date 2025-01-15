@@ -63,8 +63,23 @@ export default function ResultsGrid({ rows, columns, loading }: ResultsGridProps
           sx={{
             border: 'none',
             '& .MuiDataGrid-main': {
-              // Add horizontal scrolling
-              overflow: 'auto !important'
+              overflow: 'auto !important',
+              scrollbarWidth: 'thin',
+              scrollBehavior: 'smooth',
+              '&::-webkit-scrollbar': {
+                width: '6px',
+                height: '6px',
+              },
+              '&::-webkit-scrollbar-track': {
+                background: 'transparent',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: '#cbd5e1',
+                borderRadius: '3px',
+                '&:hover': {
+                  background: '#94a3b8',
+                },
+              },
             },
             '& .MuiDataGrid-columnHeaders': {
               bgcolor: '#f8fafc',

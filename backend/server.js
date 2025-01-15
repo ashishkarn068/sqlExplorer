@@ -40,8 +40,6 @@ app.get('/api/databases', async (req, res) => {
   } catch (err) {
     console.error('Database Error:', err);
     res.status(500).json({ error: err.message });
-  } finally {
-    await sql.close();
   }
 });
 
@@ -111,8 +109,6 @@ app.get('/api/tables/:database', async (req, res) => {
   } catch (err) {
     console.error('Error:', err);
     res.status(500).json({ error: err.message });
-  } finally {
-    await sql.close();
   }
 });
 
@@ -170,8 +166,6 @@ app.post('/api/query', async (req, res) => {
       error: err.message,
       details: 'Error executing query'
     });
-  } finally {
-    await sql.close();
   }
 });
 
