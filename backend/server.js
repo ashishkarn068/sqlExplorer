@@ -3,6 +3,8 @@ const sql = require('mssql/msnodesqlv8');
 const cors = require('cors');
 const DatabaseCache = require('./cache');
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(cors());
@@ -20,6 +22,28 @@ const config = {
     instanceName: 'SQLEXPRESS'
   }
 };
+
+// Load tableIndex.json and store in cache
+const loadTableIndexToCache = () => {
+  const filePath = path.join(__dirname, 'resources', 'tableIndex.json');
+  fs.readFile(filePath, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Error reading tableIndex.json:', err);
+      return;
+    }
+    try {
+      const tableIndexData = JSON.parse(data);
+      DatabaseCache.setTables('tableIndex', tableIndexData);
+      console.log('Table index data cached successfully.');
+      console.log('Available tables in cache:', tableIndexData.map(table => table.tableName));
+    } catch (parseErr) {
+      console.error('Error parsing tableIndex.json:', parseErr);
+    }
+  });
+};
+
+// Call the function to load table index data into cache
+loadTableIndexToCache();
 
 // API endpoint to get databases
 app.get('/api/databases', async (req, res) => {
@@ -169,58 +193,60 @@ app.post('/api/query', async (req, res) => {
   }
 });
 
-// Update test connection endpoint
-app.get('/api/test-connection/:database', async (req, res) => {
-  const { database } = req.params;
-  
-  try {
-    const pool = new sql.ConnectionPool({
-      ...config,
-      database: database,
-    });
+// API endpoint to get indexed columns for a table
+app.get('/api/indexed-columns/:tableName', (req, res) => {
+  const tableName = req.params.tableName;
+  console.log('Fetching indexed columns for table:', tableName);
 
-    await pool.connect();
-    console.log(`Successfully connected to database: ${database}`);
-    await pool.close();
-    
-    res.json({ success: true, message: 'Connection successful' });
-  } catch (error) {
-    console.error('SQL Server Connection Error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Connection failed', 
-      error: error.message 
-    });
+  // Retrieve table index data from cache
+  const tableIndexData = DatabaseCache.getTables('tableIndex');
+  if (!tableIndexData) {
+    console.error('Table index data not found in cache');
+    return res.status(404).json({ error: 'Table index data not found in cache' });
   }
+
+  // Log available table names in cache
+  console.log('Available tables in cache:', tableIndexData.map(table => table.tableName.toLowerCase()));
+
+  // Find the indexed columns for the specified table
+  const tableData = tableIndexData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
+  if (!tableData) {
+    console.error('Table not found in index data');
+    return res.status(404).json({ error: 'Table not found in index data' });
+  }
+
+  // Collect all indexed columns
+  const indexedColumns = tableData.indexes.flatMap(index => index.columns);
+  res.json(indexedColumns);
 });
 
-// Add endpoint to clear cache if needed
-app.post('/api/cache/clear/:database?', (req, res) => {
-  const dbName = req.params.database;
-  if (dbName) {
-    DatabaseCache.clearDatabase(dbName);
-    res.json({ message: `Cache cleared for database: ${dbName}` });
-  } else {
-    DatabaseCache.clearAll();
-    res.json({ message: 'All cache cleared' });
+// API endpoint to get table index information
+app.get('/api/table-index/:tableName', (req, res) => {
+  const tableName = req.params.tableName;
+  console.log('Fetching table index information for:', tableName);
+
+  // Retrieve table index data from cache
+  const tableIndexData = DatabaseCache.getTables('tableIndex');
+  if (!tableIndexData) {
+    return res.status(404).json({ error: 'Table index data not found in cache' });
   }
+
+  // Find the table data
+  const tableData = tableIndexData.find(table => 
+    table.tableName.toLowerCase() === tableName.toLowerCase()
+  );
+
+  if (!tableData) {
+    return res.status(404).json({ error: 'Table not found in index data' });
+  }
+
+  // Return the table data with indexes
+  res.json({
+    indexes: tableData.indexes || []
+  });
 });
 
-// Add endpoint to refresh cache for a database
-app.post('/api/cache/refresh/:database', async (req, res) => {
-  const dbName = req.params.database;
-  DatabaseCache.clearDatabase(dbName);
-  
-  try {
-    const response = await fetch(`http://localhost:${process.env.PORT}/api/tables/${dbName}`);
-    const data = await response.json();
-    res.json({ message: `Cache refreshed for database: ${dbName}`, tables: data });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-const PORT = process.env.PORT || 1433;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-}); 
+});

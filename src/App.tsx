@@ -16,6 +16,8 @@ function App() {
   const [tables, setTables] = useState<Table[]>([]);
   const [columns, setColumns] = useState<any[]>([]);
   const [isLoadingTables, setIsLoadingTables] = useState(false);
+  const [indexedColumns, setIndexedColumns] = useState<string[]>([]);
+  const [tableData, setTableData] = useState<{ indexes: Array<{ indexName: string; columns: string[] }> }>({ indexes: [] });
 
   useEffect(() => {
     const fetchDatabases = async () => {
@@ -142,6 +144,22 @@ function App() {
       console.error('Error fetching databases:', error);
     }
   };
+
+  useEffect(() => {
+    if (selectedTable) {
+      const fetchIndexedColumns = async () => {
+        const response = await fetch(`http://localhost:3001/api/indexed-columns/${selectedTable.name}`);
+        const data = await response.json();
+        setIndexedColumns(data);
+        
+        // Set table data with index information
+        const tableIndexResponse = await fetch(`http://localhost:3001/api/table-index/${selectedTable.name}`);
+        const tableIndexData = await tableIndexResponse.json();
+        setTableData(tableIndexData);
+      };
+      fetchIndexedColumns();
+    }
+  }, [selectedTable]);
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
@@ -322,6 +340,8 @@ function App() {
             rows={results}
             columns={columns}
             loading={loading}
+            indexedColumns={indexedColumns}
+            tableData={tableData}
           />
         </Box>
       </Box>
