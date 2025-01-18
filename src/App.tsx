@@ -18,6 +18,7 @@ function App() {
   const [isLoadingTables, setIsLoadingTables] = useState(false);
   const [indexedColumns, setIndexedColumns] = useState<string[]>([]);
   const [tableData, setTableData] = useState<{ indexes: Array<{ indexName: string; columns: string[] }> }>({ indexes: [] });
+  const [activeTableName, setActiveTableName] = useState<string>('');
 
   useEffect(() => {
     const fetchDatabases = async () => {
@@ -67,9 +68,15 @@ function App() {
   const handleQuerySubmit = async (params: QueryParams) => {
     clearResults();
     setLoading(true);
+    setActiveTableName('');
     
     try {
       console.log('Submitting query:', params);
+      // Ensure we're only handling QueryBuilder queries
+      if (params.rawQuery) {
+        throw new Error('Raw SQL queries should be executed from SQL Command section');
+      }
+
       const response = await fetch('http://localhost:3001/api/query', {
         method: 'POST',
         headers: {
@@ -105,9 +112,12 @@ function App() {
       }
 
       setResults(data);
+      // Set table name from QueryBuilder
+      setActiveTableName(params.tableName ? params.tableName.toUpperCase() : '');
     } catch (error) {
       console.error('Error executing query:', error);
       alert('Error executing query. Check console for details.');
+      setActiveTableName('');
     } finally {
       setLoading(false);
     }
@@ -146,20 +156,74 @@ function App() {
   };
 
   useEffect(() => {
-    if (selectedTable) {
+    if (activeTableName) {
       const fetchIndexedColumns = async () => {
-        const response = await fetch(`http://localhost:3001/api/indexed-columns/${selectedTable.name}`);
+        const response = await fetch(`http://localhost:3001/api/indexed-columns/${activeTableName}`);
         const data = await response.json();
         setIndexedColumns(data);
         
         // Set table data with index information
-        const tableIndexResponse = await fetch(`http://localhost:3001/api/table-index/${selectedTable.name}`);
+        const tableIndexResponse = await fetch(`http://localhost:3001/api/table-index/${activeTableName}`);
         const tableIndexData = await tableIndexResponse.json();
         setTableData(tableIndexData);
       };
       fetchIndexedColumns();
     }
-  }, [selectedTable]);
+  }, [activeTableName]);
+
+  const handleSqlQuerySubmit = async (query: string) => {
+    clearResults();
+    setLoading(true);
+    setActiveTableName('');
+    
+    try {
+      const response = await fetch('http://localhost:3001/api/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          database: selectedDatabase,
+          rawQuery: query
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        console.error('Query error:', data.error);
+        alert(data.error);
+        return;
+      }
+
+      // Extract column information from the first row
+      if (data.length > 0) {
+        const gridColumns = Object.keys(data[0])
+          .filter(key => key !== 'id')
+          .map(key => ({
+            field: key,
+            headerName: key,
+            flex: 1,
+          }));
+        setColumns(gridColumns);
+      }
+
+      setResults(data);
+
+      // Try to extract table name from SQL query
+      const tableMatch = query.match(/FROM\s+\[?(\w+)\]?/i);
+      setActiveTableName(tableMatch ? tableMatch[1].toUpperCase() : '');
+    } catch (error) {
+      console.error('Error executing SQL query:', error);
+      alert('Error executing SQL query. Check console for details.');
+      setActiveTableName('');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
@@ -325,6 +389,7 @@ function App() {
             selectedTable={selectedTable}
             onTableChange={setSelectedTable}
             onQuerySubmit={handleQuerySubmit}
+            onSqlQuerySubmit={handleSqlQuerySubmit}
             isLoading={loading}
           />
         </Box>
@@ -341,6 +406,7 @@ function App() {
             columns={columns}
             loading={loading}
             indexedColumns={indexedColumns}
+            tableName={activeTableName}
             tableData={tableData}
           />
         </Box>

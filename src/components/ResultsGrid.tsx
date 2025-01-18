@@ -1,5 +1,5 @@
 import { DataGrid, GridColDef, GridColumnHeaderParams } from '@mui/x-data-grid';
-import { Paper, Typography, Box, Button, Switch, FormControlLabel, Tooltip } from '@mui/material';
+import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip } from '@mui/material';
 import { Table as TableIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -8,6 +8,7 @@ interface ResultsGridProps {
   columns: GridColDef[];
   loading: boolean;
   indexedColumns: string[];
+  tableName?: string;
   tableData?: {
     indexes: Array<{
       indexName: string;
@@ -16,7 +17,7 @@ interface ResultsGridProps {
   };
 }
 
-export default function ResultsGrid({ rows, columns, loading, indexedColumns = [], tableData }: ResultsGridProps) {
+export default function ResultsGrid({ rows, columns, loading, indexedColumns = [], tableName, tableData }: ResultsGridProps) {
   const safeRows = Array.isArray(rows) ? rows : [];
   
   const [highlightEnabled, setHighlightEnabled] = useState(true);
@@ -85,7 +86,7 @@ export default function ResultsGrid({ rows, columns, loading, indexedColumns = [
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
           <TableIcon size={18} className="text-gray-600" />
           <Typography variant="subtitle1" sx={{ ml: 1, fontWeight: 600, fontSize: 14 }}>
-            Query Results
+            {tableName ? `${tableName} - Query Results` : 'Query Results'}
           </Typography>
           <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary', fontSize: 12 }}>
             {safeRows.length} rows

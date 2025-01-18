@@ -1,4 +1,4 @@
-import { useState, KeyboardEvent } from 'react';
+import { useState } from 'react';
 import {
   Paper,
   Box,
@@ -24,6 +24,7 @@ interface QueryBuilderProps {
   selectedTable: Table | null;
   onTableChange: (table: Table | null) => void;
   onQuerySubmit: (params: QueryParams) => void;
+  onSqlQuerySubmit: (query: string) => void;
   isLoading: boolean;
 }
 
@@ -32,6 +33,7 @@ export default function QueryBuilder({
   selectedTable,
   onTableChange,
   onQuerySubmit,
+  onSqlQuerySubmit,
   isLoading
 }: QueryBuilderProps) {
   const [whereColumn, setWhereColumn] = useState('');
@@ -43,9 +45,7 @@ export default function QueryBuilder({
 
   const handleSubmit = () => {
     if (sqlCommand.trim()) {
-      onQuerySubmit({
-        rawQuery: sqlCommand
-      });
+      alert('Please use the Execute button in the SQL Command section to run SQL queries');
       return;
     }
 
@@ -71,10 +71,38 @@ export default function QueryBuilder({
     setSqlCommand('');
   };
 
-  const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-      handleSubmit();
+  const handleSqlExecute = () => {
+    const query = sqlCommand.trim();
+    if (!query) {
+      alert('Please enter a SQL query');
+      return;
     }
+
+    // Basic SQL query validation
+    if (!query.toLowerCase().startsWith('select')) {
+      alert('Only SELECT queries are allowed');
+      return;
+    }
+
+    // Ensure the query has a FROM clause
+    if (!query.toLowerCase().includes('from')) {
+      alert('Query must include a FROM clause');
+      return;
+    }
+
+    // Extract table name and validate existence
+    const fromMatch = query.match(/from\s+([^\s;]+)/i);
+    if (fromMatch) {
+      const tableName = fromMatch[1].replace(/[\[\]]/g, '');
+      if (!tables.some(t => t.name.toLowerCase() === tableName.toLowerCase())) {
+        alert(`Table "${tableName}" does not exist in the database`);
+        return;
+      }
+    }
+
+    onSqlQuerySubmit(query);
+    setSqlCommand('');
+    setSqlCommandOpen(false);
   };
 
   return (
@@ -301,6 +329,16 @@ export default function QueryBuilder({
             }}
           >
             <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+              <Tooltip title="Execute SQL" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={handleSqlExecute}
+                  disabled={isLoading}
+                  sx={{ p: 0.5 }}
+                >
+                  <Search size={14} />
+                </IconButton>
+              </Tooltip>
               <Tooltip title="Copy" arrow>
                 <IconButton 
                   size="small" 
@@ -337,7 +375,12 @@ export default function QueryBuilder({
                 fontSize: 13,
                 fontFamily: 'monospace'
               }}
-              onKeyDown={handleKeyDown}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  handleSqlExecute();
+                }
+              }}
             />
           </Paper>
         </Collapse>
