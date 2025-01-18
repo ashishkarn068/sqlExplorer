@@ -45,6 +45,32 @@ const loadTableIndexToCache = () => {
 // Call the function to load table index data into cache
 loadTableIndexToCache();
 
+// Load tableRelation.json and store in cache
+const loadTableRelationToCache = () => {
+  const filePath = path.join(__dirname, 'resources', 'tableRelation.json');
+  fs.readFile(filePath, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Error reading tableRelation.json:', err);
+      return;
+    }
+    try {
+      const tableRelationData = JSON.parse(data);
+      DatabaseCache.setTables('tableRelation', tableRelationData);
+      console.log('Table relation data cached successfully.');
+    } catch (parseErr) {
+      console.error('Error parsing tableRelation.json:', parseErr);
+    }
+  });
+};
+
+// Call the function to load table relation data into cache
+loadTableRelationToCache();
+
+// Ensure case-insensitive comparisons
+const caseInsensitiveFind = (array, key, value) => {
+  return array.find(item => item[key].toLowerCase() === value.toLowerCase());
+};
+
 // API endpoint to get databases
 app.get('/api/databases', async (req, res) => {
   try {
@@ -244,6 +270,28 @@ app.get('/api/table-index/:tableName', (req, res) => {
   res.json({
     indexes: tableData.indexes || []
   });
+});
+
+// API endpoint to get table relation information
+app.get('/api/table-relation/:tableName', (req, res) => {
+  const tableName = req.params.tableName;
+  console.log('Fetching table relation information for:', tableName);
+
+  // Retrieve table relation data from cache
+  const tableRelationData = DatabaseCache.getTables('tableRelation');
+  if (!tableRelationData) {
+    return res.status(404).json({ error: 'Table relation data not found in cache' });
+  }
+
+  // Find the table data
+  const tableData = caseInsensitiveFind(tableRelationData, 'tableName', tableName);
+
+  if (!tableData) {
+    return res.status(404).json({ error: 'Table not found in relation data' });
+  }
+
+  // Return the table data with relations
+  res.json(tableData);
 });
 
 const PORT = process.env.PORT || 3001;

@@ -1,7 +1,18 @@
-import { DataGrid, GridColDef, GridColumnHeaderParams } from '@mui/x-data-grid';
-import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip } from '@mui/material';
+import { DataGrid, GridColDef, GridColumnHeaderParams, GridRenderCellParams } from '@mui/x-data-grid';
+import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip, Link } from '@mui/material';
 import { Table as TableIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
+
+interface Relation {
+  name: string;
+  relatedTable: string;
+  cardinality: string;
+  relationshipType: string;
+  constraints: Array<{
+    field: string;
+    relatedField: string;
+  }>;
+}
 
 interface ResultsGridProps {
   rows: any[];
@@ -15,22 +26,70 @@ interface ResultsGridProps {
       columns: string[];
     }>;
   };
+  onRelatedTableClick?: (tableName: string, columnValue: any) => void;
 }
 
-export default function ResultsGrid({ rows, columns, loading, indexedColumns = [], tableName, tableData }: ResultsGridProps) {
+export default function ResultsGrid({ 
+  rows, 
+  columns, 
+  loading, 
+  indexedColumns = [], 
+  tableName, 
+  tableData,
+  onRelatedTableClick 
+}: ResultsGridProps) {
   const safeRows = Array.isArray(rows) ? rows : [];
-  
   const [highlightEnabled, setHighlightEnabled] = useState(true);
+  const [relationData, setRelationData] = useState<any>(null);
 
   const toggleHighlight = () => {
     setHighlightEnabled(!highlightEnabled);
   };
+
+  // Fetch relation data when tableName changes
+  useEffect(() => {
+    const fetchRelationData = async () => {
+      if (tableName) {
+        try {
+          const response = await fetch(`http://localhost:3001/api/table-relation/${tableName}`);
+          const data = await response.json();
+          
+          // Log the raw data first
+          console.log('Raw relation data for table', tableName, ':', data);
+          
+          // Check if data has the expected structure
+          if (data && typeof data === 'object' && 'relations' in data) {
+            const relations = data.relations;
+            if (Array.isArray(relations) && relations.length > 0) {
+              console.log('Found relations:', relations);
+              setRelationData(data);
+            } else {
+              console.log('No relations array found in data');
+              setRelationData({ relations: [] });
+            }
+          } else {
+            console.log('Invalid relation data structure:', data);
+            setRelationData({ relations: [] });
+          }
+        } catch (error) {
+          console.error('Error fetching relation data:', error);
+          setRelationData({ relations: [] });
+        }
+      }
+    };
+    fetchRelationData();
+  }, [tableName]);
 
   const styles = `
     .indexed-column {
       background-color: #e8f5e9;
       color: #2e7d32;
       font-weight: 600;
+    }
+    .related-column {
+      color: #1976d2;
+      cursor: pointer;
+      text-decoration: underline;
     }
   `;
 
@@ -40,24 +99,62 @@ export default function ResultsGrid({ rows, columns, loading, indexedColumns = [
       index.columns.map(c => c.toLowerCase()).includes(col.field.toLowerCase())
     );
     
+    // Check if this column is related to another table
+    const relation = relationData?.relations?.find((r: Relation) => {
+      if (!r || !r.constraints) return false;
+      return r.constraints.some(constraint => 
+        constraint.field.toLowerCase() === col.field.toLowerCase()
+      );
+    });
+
+    if (relation) {
+      console.log('Found relation for column:', col.field, relation);
+    }
+
     const columnClassName = highlightEnabled && isIndexed ? 'indexed-column' : '';
     
     return {
       ...col,
       flex: undefined,
-      width: 150,
-      headerAlign: 'left' as const,
-      align: 'left' as const,
+      width: Math.max((col.headerName?.length || col.field.length) * 8 + 32, 80),
+      headerAlign: 'center' as const,
+      align: 'center' as const,
       headerClassName: columnClassName,
       cellClassName: columnClassName,
       renderHeader: (params: GridColumnHeaderParams) => (
         <Tooltip 
-          title={isIndexed ? `Part of Index: ${indexInfo?.indexName || 'Unknown'}` : ''}
+          title={isIndexed ? `Part of Index: ${indexInfo?.indexName || 'Unknown'}` : 
+                 relation ? `Related to: ${relation.relatedTable}` : ''}
           arrow
         >
           <div>{params.colDef.headerName}</div>
         </Tooltip>
-      )
+      ),
+      renderCell: relation ? (params: GridRenderCellParams) => (
+        <Link
+          component="button"
+          onClick={() => onRelatedTableClick?.(relation.relatedTable, params.value)}
+          sx={{
+            textDecoration: 'underline',
+            color: '#1976d2 !important',
+            cursor: 'pointer',
+            fontSize: '11px',
+            width: '100%',
+            display: 'block',
+            textAlign: 'center',
+            border: 'none',
+            background: 'none',
+            padding: 0,
+            fontFamily: 'inherit',
+            '&:hover': {
+              color: '#1565c0 !important',
+              textDecoration: 'underline'
+            }
+          }}
+        >
+          {params.value}
+        </Link>
+      ) : undefined
     };
   });
 

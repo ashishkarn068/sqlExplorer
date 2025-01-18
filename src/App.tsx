@@ -225,6 +225,58 @@ function App() {
     }
   };
 
+  const handleRelatedTableClick = async (targetTable: string, columnValue: any) => {
+    clearResults();
+    setLoading(true);
+    setActiveTableName('');
+    
+    try {
+      const query = `SELECT * FROM [${targetTable}] WHERE [Id] = '${columnValue}'`;
+      const response = await fetch('http://localhost:3001/api/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          database: selectedDatabase,
+          rawQuery: query
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        console.error('Query error:', data.error);
+        alert(data.error);
+        return;
+      }
+
+      // Extract column information from the first row
+      if (data.length > 0) {
+        const gridColumns = Object.keys(data[0])
+          .filter(key => key !== 'id')
+          .map(key => ({
+            field: key,
+            headerName: key,
+            flex: 1,
+          }));
+        setColumns(gridColumns);
+      }
+
+      setResults(data);
+      setActiveTableName(targetTable.toUpperCase());
+    } catch (error) {
+      console.error('Error executing related table query:', error);
+      alert('Error executing related table query. Check console for details.');
+      setActiveTableName('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
       <CssBaseline />
@@ -408,6 +460,7 @@ function App() {
             indexedColumns={indexedColumns}
             tableName={activeTableName}
             tableData={tableData}
+            onRelatedTableClick={handleRelatedTableClick}
           />
         </Box>
       </Box>
