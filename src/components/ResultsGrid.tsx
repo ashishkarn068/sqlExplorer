@@ -256,19 +256,19 @@ export default function ResultsGrid({
           bgcolor: '#f8fafc',
           border: '1px solid #e2e8f0',
           borderRadius: 2,
-          p: 3,
+          p: 1,
           mt: 2
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <TableIcon size={18} className="text-gray-600" />
-          <Typography variant="subtitle1" sx={{ ml: 1, fontWeight: 600, fontSize: 14 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <TableIcon size={12} className="text-gray-600" />
+          <Typography variant="subtitle1" sx={{ ml: 1, fontWeight: 600, fontSize: 12 }}>
             {tableName ? `${tableName} - Query Results` : 'Query Results'}
           </Typography>
           <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary', fontSize: 12 }}>
             {safeRows.length} rows
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2, ml: 'auto' }}>
+          <Box sx={{ display: 'flex', gap: 0, ml: 'auto' }}>
             <FormControlLabel
               control={<Switch checked={hideEmptyEnabled} onChange={toggleHideEmpty} size="small" />}
               label="Hide Empty"
@@ -293,7 +293,7 @@ export default function ResultsGrid({
         <Paper 
           elevation={0} 
           sx={{ 
-            height: 'calc(100% - 48px)',
+            height: '100%',
             bgcolor: 'white',
             border: '1px solid #e2e8f0'
           }}
