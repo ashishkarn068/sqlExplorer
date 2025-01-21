@@ -1,6 +1,6 @@
 import { DataGrid, GridColDef, GridColumnHeaderParams, GridRenderCellParams } from '@mui/x-data-grid';
-import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip, Link } from '@mui/material';
-import { Table as TableIcon } from 'lucide-react';
+import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip, Link, IconButton } from '@mui/material';
+import { Table as TableIcon, Copy as CopyIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface Relation {
@@ -46,6 +46,19 @@ export default function ResultsGrid({
     setHighlightEnabled(!highlightEnabled);
   };
 
+  const styles = `
+    .indexed-column {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      font-weight: 600;
+    }
+    .related-column {
+      color: #1976d2;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+  `;
+
   // Fetch relation data when tableName changes
   useEffect(() => {
     const fetchRelationData = async () => {
@@ -80,18 +93,9 @@ export default function ResultsGrid({
     fetchRelationData();
   }, [tableName]);
 
-  const styles = `
-    .indexed-column {
-      background-color: #e8f5e9;
-      color: #2e7d32;
-      font-weight: 600;
-    }
-    .related-column {
-      color: #1976d2;
-      cursor: pointer;
-      text-decoration: underline;
-    }
-  `;
+  const handleCopyToClipboard = (value: any) => {
+    navigator.clipboard.writeText(String(value));
+  };
 
   const adjustedColumns = columns.map(col => {
     const isIndexed = Array.isArray(indexedColumns) && 
@@ -100,7 +104,6 @@ export default function ResultsGrid({
       index.columns.map(c => c.toLowerCase()).includes(col.field.toLowerCase())
     );
     
-    // Check if this column is related to another table
     const relation = relationData?.relations?.find((r: Relation) => {
       if (!r || !r.constraints) return false;
       return r.constraints.some(constraint => 
@@ -108,11 +111,82 @@ export default function ResultsGrid({
       );
     });
 
-    if (relation) {
-      console.log('Found relation for column:', col.field, relation);
-    }
-
     const columnClassName = highlightEnabled && isIndexed ? 'indexed-column' : '';
+    
+    const renderCellWithCopy = (params: GridRenderCellParams) => {
+      const value = params.value;
+      
+      if (relation) {
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+            <Link
+              component="button"
+              onClick={() => onRelatedTableClick?.(relation.relatedTable, value, relation.constraints)}
+              sx={{
+                textDecoration: 'underline',
+                color: '#1976d2 !important',
+                cursor: 'pointer',
+                fontSize: '11px',
+                border: 'none',
+                background: 'none',
+                padding: 0,
+                fontFamily: 'inherit',
+                '&:hover': {
+                  color: '#1565c0 !important',
+                  textDecoration: 'underline'
+                }
+              }}
+            >
+              {value}
+            </Link>
+            <Tooltip title="Copy to clipboard" arrow>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCopyToClipboard(value);
+                }}
+                sx={{
+                  ml: 0.5,
+                  p: 0.2,
+                  opacity: 0,
+                  '&:hover': { opacity: 1 },
+                  '.MuiDataGrid-row:hover &': { opacity: 0.7 }
+                }}
+              >
+                <CopyIcon size={12} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        );
+      }
+
+      return (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+          <Typography variant="body2" sx={{ fontSize: '11px' }}>
+            {value}
+          </Typography>
+          <Tooltip title="Copy to clipboard" arrow>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopyToClipboard(value);
+              }}
+              sx={{
+                ml: 0.5,
+                p: 0.2,
+                opacity: 0,
+                '&:hover': { opacity: 1 },
+                '.MuiDataGrid-row:hover &': { opacity: 0.7 }
+              }}
+            >
+              <CopyIcon size={12} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      );
+    };
     
     return {
       ...col,
@@ -131,31 +205,7 @@ export default function ResultsGrid({
           <div>{params.colDef.headerName}</div>
         </Tooltip>
       ),
-      renderCell: relation ? (params: GridRenderCellParams) => (
-        <Link
-          component="button"
-          onClick={() => onRelatedTableClick?.(relation.relatedTable, params.value, relation.constraints)}
-          sx={{
-            textDecoration: 'underline',
-            color: '#1976d2 !important',
-            cursor: 'pointer',
-            fontSize: '11px',
-            width: '100%',
-            display: 'block',
-            textAlign: 'center',
-            border: 'none',
-            background: 'none',
-            padding: 0,
-            fontFamily: 'inherit',
-            '&:hover': {
-              color: '#1565c0 !important',
-              textDecoration: 'underline'
-            }
-          }}
-        >
-          {params.value}
-        </Link>
-      ) : undefined
+      renderCell: renderCellWithCopy
     };
   });
 
