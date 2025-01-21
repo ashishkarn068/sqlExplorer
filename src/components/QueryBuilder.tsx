@@ -198,8 +198,16 @@ export default function QueryBuilder({
                       top: '50%',
                       transform: 'translateY(-50%)',
                       right: 2,
+                      display: 'flex',
+                      flexDirection: 'row',
                       '& .MuiButtonBase-root': {
                         padding: 0
+                      },
+                      '& .MuiAutocomplete-clearIndicator': {
+                        order: 0
+                      },
+                      '& .MuiAutocomplete-popupIndicator': {
+                        order: 1
                       }
                     }
                   }}
@@ -224,7 +232,10 @@ export default function QueryBuilder({
                   padding: '6px 8px !important'
                 },
                 '& .MuiAutocomplete-clearIndicator': {
-                  padding: 2
+                  visibility: 'hidden'
+                },
+                '&:hover .MuiAutocomplete-clearIndicator': {
+                  visibility: whereColumn ? 'visible' : 'hidden'
                 }
               }}
             />
@@ -243,47 +254,128 @@ export default function QueryBuilder({
               gap: 1
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', height: 20 }}>
-              <Filter size={14} className="text-gray-600" style={{ marginTop: -2 }} />
-              <Typography variant="body2" sx={{ ml: 1, fontSize: 12 }}>Filter</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <FormControl size="small" sx={{ width: '40%' }}>
-                <InputLabel sx={{ fontSize: 12 }}>Column</InputLabel>
-                <Select
-                  value={whereColumn}
-                  label="Column"
-                  onChange={(e) => setWhereColumn(e.target.value)}
-                  sx={{
-                    fontSize: 11,
-                    '& .MuiSelect-select': {
-                      fontSize: 11,
-                      padding: '6px 8px'
-                    },
-                    '& .MuiMenuItem-root': {
-                      fontSize: 11,
-                      minHeight: 'unset',
-                      padding: '2px 8px',
-                      lineHeight: '1.2'
-                    }
+            <Box sx={{ display: 'flex', alignItems: 'center', height: 20, justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Filter size={14} className="text-gray-600" style={{ marginTop: -2 }} />
+                <Typography variant="body2" sx={{ ml: 1, fontSize: 12 }}>Filter</Typography>
+              </Box>
+              <Tooltip title="Clear filters" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => {
+                    setWhereColumn('');
+                    setWhereValue('');
+                  }}
+                  sx={{ 
+                    p: 0.5,
+                    visibility: whereColumn || whereValue ? 'visible' : 'hidden'
                   }}
                 >
-                  {selectedTable?.columns.map((column) => (
-                    <MenuItem 
-                      key={column.name} 
-                      value={column.name}
-                      sx={{
-                        fontSize: 11,
-                        minHeight: 'unset',
-                        padding: '2px 8px',
-                        lineHeight: '1.2'
+                  <X size={14} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Autocomplete
+                size="small"
+                options={selectedTable?.columns.map(col => col.name) || []}
+                value={whereColumn}
+                onChange={(_, newValue) => setWhereColumn(newValue || '')}
+                renderOption={(props, option) => {
+                  const { key, style, ...otherProps } = props;
+                  return (
+                    <li 
+                      key={key}
+                      {...otherProps}
+                      style={{ 
+                        ...style,
+                        fontSize: '11px', 
+                        padding: '2px 8px' 
                       }}
                     >
-                      {column.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                      {option}
+                    </li>
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="Column" 
+                    variant="outlined"
+                    size="small"
+                    InputProps={{
+                      ...params.InputProps,
+                      style: { fontSize: 11 }
+                    }}
+                    InputLabelProps={{
+                      style: { fontSize: 12 }
+                    }}
+                    sx={{
+                      '& .MuiInputBase-root': {
+                        height: '28px',
+                        '& input': {
+                          padding: '6px 8px',
+                          fontSize: 11,
+                          height: '16px'
+                        },
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#e2e8f0'
+                        },
+                        padding: '0'
+                      },
+                      '& .MuiInputLabel-root': { 
+                        fontSize: 12,
+                        transform: 'translate(14px, 6px) scale(1)'
+                      },
+                      '& .MuiInputLabel-shrink': {
+                        transform: 'translate(14px, -9px) scale(0.75)'
+                      },
+                      '& .MuiAutocomplete-endAdornment': {
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        right: 2,
+                        display: 'flex',
+                        flexDirection: 'row',
+                        '& .MuiButtonBase-root': {
+                          padding: 0
+                        },
+                        '& .MuiAutocomplete-clearIndicator': {
+                          order: 0
+                        },
+                        '& .MuiAutocomplete-popupIndicator': {
+                          order: 1
+                        }
+                      }
+                    }}
+                  />
+                )}
+                sx={{
+                  width: '40%',
+                  '& .MuiAutocomplete-option': {
+                    fontSize: 11,
+                    py: 0,
+                    minHeight: 'unset',
+                    lineHeight: '1.2'
+                  },
+                  '& .MuiAutocomplete-listbox': {
+                    '& li': {
+                      fontSize: 11,
+                      minHeight: 'unset',
+                      padding: '2px 8px'
+                    }
+                  },
+                  '& .MuiAutocomplete-input': {
+                    fontSize: 11,
+                    padding: '6px 8px !important'
+                  },
+                  '& .MuiAutocomplete-clearIndicator': {
+                    visibility: 'hidden'
+                  },
+                  '&:hover .MuiAutocomplete-clearIndicator': {
+                    visibility: whereColumn ? 'visible' : 'hidden'
+                  }
+                }}
+              />
               <TextField
                 size="small"
                 label="Value"
