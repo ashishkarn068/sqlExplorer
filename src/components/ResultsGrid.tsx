@@ -40,11 +40,27 @@ export default function ResultsGrid({
 }: ResultsGridProps) {
   const safeRows = Array.isArray(rows) ? rows : [];
   const [highlightEnabled, setHighlightEnabled] = useState(true);
+  const [hideEmptyEnabled, setHideEmptyEnabled] = useState(false);
   const [relationData, setRelationData] = useState<any>(null);
 
   const toggleHighlight = () => {
     setHighlightEnabled(!highlightEnabled);
   };
+
+  const toggleHideEmpty = () => {
+    setHideEmptyEnabled(!hideEmptyEnabled);
+  };
+
+  // Filter out empty columns if hideEmptyEnabled is true
+  const filteredColumns = hideEmptyEnabled 
+    ? columns.filter(col => {
+        // Check if the column has any non-empty values
+        return safeRows.some(row => {
+          const value = row[col.field];
+          return value !== null && value !== undefined && value !== '';
+        });
+      })
+    : columns;
 
   const styles = `
     .indexed-column {
@@ -114,14 +130,27 @@ export default function ResultsGrid({
     const columnClassName = highlightEnabled && isIndexed ? 'indexed-column' : '';
     
     const renderCellWithCopy = (params: GridRenderCellParams) => {
-      const value = params.value;
+      // Format the value to ensure it's renderable
+      const formatValue = (val: any): string => {
+        if (val === null || val === undefined) return '';
+        if (typeof val === 'object') {
+          try {
+            return JSON.stringify(val);
+          } catch {
+            return '';
+          }
+        }
+        return String(val);
+      };
+
+      const value = formatValue(params.value);
       
       if (relation) {
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
             <Link
               component="button"
-              onClick={() => onRelatedTableClick?.(relation.relatedTable, value, relation.constraints)}
+              onClick={() => onRelatedTableClick?.(relation.relatedTable, params.value, relation.constraints)}
               sx={{
                 textDecoration: 'underline',
                 color: '#1976d2 !important',
@@ -239,16 +268,26 @@ export default function ResultsGrid({
           <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary', fontSize: 12 }}>
             {safeRows.length} rows
           </Typography>
-          <FormControlLabel
-            control={<Switch checked={highlightEnabled} onChange={toggleHighlight} size="small" />}
-            label="Highlight Index"
-            sx={{ 
-              ml: 'auto',
-              '& .MuiFormControlLabel-label': {
-                fontSize: 12
-              }
-            }}
-          />
+          <Box sx={{ display: 'flex', gap: 2, ml: 'auto' }}>
+            <FormControlLabel
+              control={<Switch checked={hideEmptyEnabled} onChange={toggleHideEmpty} size="small" />}
+              label="Hide Empty"
+              sx={{ 
+                '& .MuiFormControlLabel-label': {
+                  fontSize: 12
+                }
+              }}
+            />
+            <FormControlLabel
+              control={<Switch checked={highlightEnabled} onChange={toggleHighlight} size="small" />}
+              label="Highlight Index"
+              sx={{ 
+                '& .MuiFormControlLabel-label': {
+                  fontSize: 12
+                }
+              }}
+            />
+          </Box>
         </Box>
         
         <Paper 
@@ -261,7 +300,9 @@ export default function ResultsGrid({
         >
           <DataGrid
             rows={safeRows}
-            columns={adjustedColumns}
+            columns={adjustedColumns.filter(col => 
+              !hideEmptyEnabled || filteredColumns.some(fc => fc.field === col.field)
+            )}
             loading={loading}
             pagination
             pageSizeOptions={[25, 50, 100]}

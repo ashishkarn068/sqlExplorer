@@ -121,7 +121,7 @@ export default function QueryBuilder({
           Query Builder
         </Typography>
 
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 2 }}>
           {/* Table Selection */}
           <Paper 
             elevation={0} 
@@ -153,10 +153,10 @@ export default function QueryBuilder({
                   size="small"
                   InputProps={{
                     ...params.InputProps,
-                    style: { fontSize: 13 }
+                    style: { fontSize: 12 }
                   }}
                   InputLabelProps={{
-                    style: { fontSize: 13 }
+                    style: { fontSize: 12 }
                   }}
                 />
               )}
@@ -188,9 +188,9 @@ export default function QueryBuilder({
                   label="Column"
                   onChange={(e) => setWhereColumn(e.target.value)}
                   sx={{
-                    fontSize: 13,
+                    fontSize: 12,
                     '& .MuiMenuItem-root': {
-                      fontSize: 13
+                      fontSize: 12
                     }
                   }}
                 >
@@ -208,8 +208,8 @@ export default function QueryBuilder({
                 onChange={(e) => setWhereValue(e.target.value)}
                 sx={{ 
                   flex: 1,
-                  '& .MuiInputBase-input': { fontSize: 13 },
-                  '& .MuiInputLabel-root': { fontSize: 13 }
+                  '& .MuiInputBase-input': { fontSize: 12 },
+                  '& .MuiInputLabel-root': { fontSize: 12 }
                 }}
               />
             </Box>
@@ -238,15 +238,15 @@ export default function QueryBuilder({
             </Box>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <FormControl size="small" sx={{ flex: 2 }}>
-                <InputLabel sx={{ fontSize: 13 }}>Order By</InputLabel>
+                <InputLabel sx={{ fontSize: 12 }}>Order By</InputLabel>
                 <Select
                   value={orderByColumn}
                   label="Order By"
                   onChange={(e) => setOrderByColumn(e.target.value)}
                   sx={{
-                    fontSize: 13,
+                    fontSize: 12,
                     '& .MuiMenuItem-root': {
-                      fontSize: 13
+                      fontSize: 12
                     }
                   }}
                 >
@@ -258,15 +258,15 @@ export default function QueryBuilder({
                 </Select>
               </FormControl>
               <FormControl size="small" sx={{ flex: 1 }}>
-                <InputLabel sx={{ fontSize: 13 }}>Direction</InputLabel>
+                <InputLabel sx={{ fontSize: 12 }}>Direction</InputLabel>
                 <Select
                   value={orderDirection}
                   label="Direction"
                   onChange={(e) => setOrderDirection(e.target.value as 'asc' | 'desc')}
                   sx={{
-                    fontSize: 13,
+                    fontSize: 12,
                     '& .MuiMenuItem-root': {
-                      fontSize: 13
+                      fontSize: 12
                     }
                   }}
                 >
@@ -282,7 +282,7 @@ export default function QueryBuilder({
             variant="contained"
             onClick={handleSubmit}
             disabled={isLoading}
-            startIcon={<Search size={16} />}
+            startIcon={<Search size={14} />}
             size="small"
             sx={{
               bgcolor: '#3b82f6',
@@ -297,8 +297,8 @@ export default function QueryBuilder({
               alignSelf: 'flex-end',  // Align with the bottom of other components
               mt: 'auto',  // Push to bottom of container
               mb: 1,  // Add some bottom margin
-              px: 2,  // Add horizontal padding
-              fontSize: 13,
+              //px: 2,  // Add horizontal padding
+              fontSize: 12,
               textTransform: 'none'  // Prevent all-caps
             }}
           >
@@ -307,7 +307,7 @@ export default function QueryBuilder({
         </Box>
 
         {/* SQL Command Section */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
           <Button
             size="small"
             startIcon={<Code size={16} />}
