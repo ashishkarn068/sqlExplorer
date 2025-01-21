@@ -121,7 +121,7 @@ export default function QueryBuilder({
           Query Builder
         </Typography>
 
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 1 }}>
           {/* Table Selection */}
           <Paper 
             elevation={0} 
@@ -135,8 +135,8 @@ export default function QueryBuilder({
               gap: 1
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <DatabaseIcon size={12} className="text-gray-600" />
+            <Box sx={{ display: 'flex', alignItems: 'center', height: 20 }}>
+              <DatabaseIcon size={14} className="text-gray-600" />
               <Typography variant="body2" sx={{ ml: 1, fontSize: 12 }}>Table</Typography>
             </Box>
             <Autocomplete
@@ -145,6 +145,22 @@ export default function QueryBuilder({
               getOptionLabel={(option) => option.name}
               value={selectedTable}
               onChange={(_, newValue) => onTableChange(newValue)}
+              renderOption={(props, option) => {
+                const { key, style, ...otherProps } = props;
+                return (
+                  <li 
+                    key={key}
+                    {...otherProps}
+                    style={{ 
+                      ...style,
+                      fontSize: '11px', 
+                      padding: '2px 8px' 
+                    }}
+                  >
+                    {option.name}
+                  </li>
+                );
+              }}
               renderInput={(params) => (
                 <TextField 
                   {...params} 
@@ -153,13 +169,64 @@ export default function QueryBuilder({
                   size="small"
                   InputProps={{
                     ...params.InputProps,
-                    style: { fontSize: 12 }
+                    style: { fontSize: 11 }
                   }}
                   InputLabelProps={{
                     style: { fontSize: 12 }
                   }}
+                  sx={{
+                    '& .MuiInputBase-root': {
+                      height: '28px',
+                      '& input': {
+                        padding: '6px 8px',
+                        fontSize: 11,
+                        height: '16px'
+                      },
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#e2e8f0'
+                      },
+                      padding: '0'
+                    },
+                    '& .MuiInputLabel-root': { 
+                      fontSize: 12,
+                      transform: 'translate(14px, 6px) scale(1)'
+                    },
+                    '& .MuiInputLabel-shrink': {
+                      transform: 'translate(14px, -9px) scale(0.75)'
+                    },
+                    '& .MuiAutocomplete-endAdornment': {
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      right: 2,
+                      '& .MuiButtonBase-root': {
+                        padding: 0
+                      }
+                    }
+                  }}
                 />
               )}
+              sx={{
+                '& .MuiAutocomplete-option': {
+                  fontSize: 11,
+                  py: 0,
+                  minHeight: 'unset',
+                  lineHeight: '1.2'
+                },
+                '& .MuiAutocomplete-listbox': {
+                  '& li': {
+                    fontSize: 11,
+                    minHeight: 'unset',
+                    padding: '2px 8px'
+                  }
+                },
+                '& .MuiAutocomplete-input': {
+                  fontSize: 11,
+                  padding: '6px 8px !important'
+                },
+                '& .MuiAutocomplete-clearIndicator': {
+                  padding: 2
+                }
+              }}
             />
           </Paper>
 
@@ -176,26 +243,42 @@ export default function QueryBuilder({
               gap: 1
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Filter size={12} className="text-gray-600" />
+            <Box sx={{ display: 'flex', alignItems: 'center', height: 20 }}>
+              <Filter size={14} className="text-gray-600" style={{ marginTop: -2 }} />
               <Typography variant="body2" sx={{ ml: 1, fontSize: 12 }}>Filter</Typography>
             </Box>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', gap: 1 }}>
               <FormControl size="small" sx={{ width: '40%' }}>
-                <InputLabel sx={{ fontSize: 13 }}>Column</InputLabel>
+                <InputLabel sx={{ fontSize: 12 }}>Column</InputLabel>
                 <Select
                   value={whereColumn}
                   label="Column"
                   onChange={(e) => setWhereColumn(e.target.value)}
                   sx={{
-                    fontSize: 12,
+                    fontSize: 11,
+                    '& .MuiSelect-select': {
+                      fontSize: 11,
+                      padding: '6px 8px'
+                    },
                     '& .MuiMenuItem-root': {
-                      fontSize: 12
+                      fontSize: 11,
+                      minHeight: 'unset',
+                      padding: '2px 8px',
+                      lineHeight: '1.2'
                     }
                   }}
                 >
                   {selectedTable?.columns.map((column) => (
-                    <MenuItem key={column.name} value={column.name}>
+                    <MenuItem 
+                      key={column.name} 
+                      value={column.name}
+                      sx={{
+                        fontSize: 11,
+                        minHeight: 'unset',
+                        padding: '2px 8px',
+                        lineHeight: '1.2'
+                      }}
+                    >
                       {column.name}
                     </MenuItem>
                   ))}
@@ -208,8 +291,17 @@ export default function QueryBuilder({
                 onChange={(e) => setWhereValue(e.target.value)}
                 sx={{ 
                   flex: 1,
-                  '& .MuiInputBase-input': { fontSize: 12 },
-                  '& .MuiInputLabel-root': { fontSize: 12 }
+                  '& .MuiInputBase-input': { 
+                    fontSize: 11,
+                    padding: '6px 8px'
+                  },
+                  '& .MuiInputLabel-root': { 
+                    fontSize: 12,
+                    transform: 'translate(14px, 6px) scale(1)'
+                  },
+                  '& .MuiInputLabel-shrink': {
+                    transform: 'translate(14px, -9px) scale(0.75)'
+                  }
                 }}
               />
             </Box>
@@ -228,11 +320,11 @@ export default function QueryBuilder({
               gap: 1
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', height: 20 }}>
               {orderDirection === 'asc' ? (
-                <SortAsc size={12} className="text-gray-600" />
+                <SortAsc size={14} className="text-gray-600" style={{ marginTop: -2 }} />
               ) : (
-                <SortDesc size={12} className="text-gray-600" />
+                <SortDesc size={14} className="text-gray-600" style={{ marginTop: -2 }} />
               )}
               <Typography variant="body2" sx={{ ml: 1, fontSize: 12 }}>Sort</Typography>
             </Box>
@@ -244,14 +336,30 @@ export default function QueryBuilder({
                   label="Order By"
                   onChange={(e) => setOrderByColumn(e.target.value)}
                   sx={{
-                    fontSize: 12,
+                    fontSize: 11,
+                    '& .MuiSelect-select': {
+                      fontSize: 11,
+                      padding: '6px 8px'
+                    },
                     '& .MuiMenuItem-root': {
-                      fontSize: 12
+                      fontSize: 11,
+                      minHeight: 'unset',
+                      padding: '2px 8px',
+                      lineHeight: '1.2'
                     }
                   }}
                 >
                   {selectedTable?.columns.map((column) => (
-                    <MenuItem key={column.name} value={column.name}>
+                    <MenuItem 
+                      key={column.name} 
+                      value={column.name}
+                      sx={{
+                        fontSize: 11,
+                        minHeight: 'unset',
+                        padding: '2px 8px',
+                        lineHeight: '1.2'
+                      }}
+                    >
                       {column.name}
                     </MenuItem>
                   ))}
@@ -264,14 +372,41 @@ export default function QueryBuilder({
                   label="Direction"
                   onChange={(e) => setOrderDirection(e.target.value as 'asc' | 'desc')}
                   sx={{
-                    fontSize: 12,
+                    fontSize: 11,
+                    '& .MuiSelect-select': {
+                      fontSize: 11,
+                      padding: '6px 8px'
+                    },
                     '& .MuiMenuItem-root': {
-                      fontSize: 12
+                      fontSize: 11,
+                      minHeight: 'unset',
+                      padding: '2px 8px',
+                      lineHeight: '1.2'
                     }
                   }}
                 >
-                  <MenuItem value="asc">ASC</MenuItem>
-                  <MenuItem value="desc">DESC</MenuItem>
+                  <MenuItem 
+                    value="asc"
+                    sx={{
+                      fontSize: 11,
+                      minHeight: 'unset',
+                      padding: '2px 8px',
+                      lineHeight: '1.2'
+                    }}
+                  >
+                    ASC
+                  </MenuItem>
+                  <MenuItem 
+                    value="desc"
+                    sx={{
+                      fontSize: 11,
+                      minHeight: 'unset',
+                      padding: '2px 8px',
+                      lineHeight: '1.2'
+                    }}
+                  >
+                    DESC
+                  </MenuItem>
                 </Select>
               </FormControl>
             </Box>
@@ -307,13 +442,17 @@ export default function QueryBuilder({
         </Box>
 
         {/* SQL Command Section */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 32 }}>
           <Button
             size="small"
-            startIcon={<Code size={16} />}
-            endIcon={sqlCommandOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            startIcon={<Code size={14} style={{ marginTop: -2 }} />}
+            endIcon={sqlCommandOpen ? <ChevronUp size={14} style={{ marginTop: -2 }} /> : <ChevronDown size={14} style={{ marginTop: -2 }} />}
             onClick={() => setSqlCommandOpen(!sqlCommandOpen)}
-            sx={{ fontSize: 13 }}
+            sx={{ 
+              fontSize: 12,
+              height: 24,
+              padding: '4px 8px'
+            }}
           >
             SQL Command
           </Button>

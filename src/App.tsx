@@ -388,23 +388,31 @@ function App() {
               value={selectedDatabase}
               onChange={(e) => handleDatabaseChange(e.target.value)}
               onClick={handleDatabaseClick}
+              size="small"
               displayEmpty
               sx={{
+                fontSize: 13,
                 color: '#f1f5f9',
                 bgcolor: '#1e293b',
-                fontSize: 14,
+                '& .MuiSelect-select': {
+                  color: '#f1f5f9'
+                },
                 '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#334155',
+                  borderColor: '#334155'
                 },
                 '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#475569',
+                  borderColor: '#475569'
                 },
                 '& .MuiSelect-icon': {
-                  color: '#94a3b8',
+                  color: '#94a3b8'
+                },
+                '& .MuiMenuItem-root': {
+                  fontSize: 13,
+                  color: '#1f2937'
                 }
               }}
             >
-              <MenuItem value="" disabled sx={{ fontSize: 14 }}>
+              <MenuItem value="" disabled sx={{ fontSize: 13, color: '#94a3b8' }}>
                 Choose a database
               </MenuItem>
               {databases.map((db) => (
@@ -412,8 +420,8 @@ function App() {
                   key={db.id} 
                   value={db.name}
                   sx={{
-                    fontSize: 14,
-                    color: '#f1f5f9'
+                    fontSize: 13,
+                    color: '#1f2937'
                   }}
                 >
                   {db.name}
