@@ -247,50 +247,42 @@ app.get('/api/indexed-columns/:tableName', (req, res) => {
 });
 
 // API endpoint to get table index information
-app.get('/api/table-index/:tableName', (req, res) => {
-  const tableName = req.params.tableName;
-  console.log('Fetching table index information for:', tableName);
-
-  // Retrieve table index data from cache
+app.get('/api/table-index/:tableName', async (req, res) => {
+  const { tableName } = req.params;
   const tableIndexData = DatabaseCache.getTables('tableIndex');
+  
   if (!tableIndexData) {
-    return res.status(404).json({ error: 'Table index data not found in cache' });
+    console.log(`No index information found for table: ${tableName}`);
+    return res.json({ indexes: [] });
   }
-
-  // Find the table data
-  const tableData = tableIndexData.find(table => 
-    table.tableName.toLowerCase() === tableName.toLowerCase()
-  );
-
+  
+  const tableData = tableIndexData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
+  
   if (!tableData) {
-    return res.status(404).json({ error: 'Table not found in index data' });
+    console.log(`No index information found for table: ${tableName}`);
+    return res.json({ indexes: [] });
   }
-
-  // Return the table data with indexes
-  res.json({
-    indexes: tableData.indexes || []
-  });
+  
+  res.json(tableData);
 });
 
 // API endpoint to get table relation information
-app.get('/api/table-relation/:tableName', (req, res) => {
-  const tableName = req.params.tableName;
-  console.log('Fetching table relation information for:', tableName);
-
-  // Retrieve table relation data from cache
+app.get('/api/table-relation/:tableName', async (req, res) => {
+  const { tableName } = req.params;
   const tableRelationData = DatabaseCache.getTables('tableRelation');
+  
   if (!tableRelationData) {
-    return res.status(404).json({ error: 'Table relation data not found in cache' });
+    console.log(`No relation information found for table: ${tableName}`);
+    return res.json({ relations: [] });
   }
-
-  // Find the table data
-  const tableData = caseInsensitiveFind(tableRelationData, 'tableName', tableName);
-
+  
+  const tableData = tableRelationData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
+  
   if (!tableData) {
-    return res.status(404).json({ error: 'Table not found in relation data' });
+    console.log(`No relation information found for table: ${tableName}`);
+    return res.json({ relations: [] });
   }
-
-  // Return the table data with relations
+  
   res.json(tableData);
 });
 

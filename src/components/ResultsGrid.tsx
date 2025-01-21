@@ -26,7 +26,7 @@ interface ResultsGridProps {
       columns: string[];
     }>;
   };
-  onRelatedTableClick?: (tableName: string, columnValue: any) => void;
+  onRelatedTableClick?: (tableName: string, columnValue: any, constraints: Array<{ field: string; relatedField: string }>) => void;
 }
 
 export default function ResultsGrid({ 
@@ -94,7 +94,8 @@ export default function ResultsGrid({
   `;
 
   const adjustedColumns = columns.map(col => {
-    const isIndexed = indexedColumns.map(c => c.toLowerCase()).includes(col.field.toLowerCase());
+    const isIndexed = Array.isArray(indexedColumns) && 
+      indexedColumns.map(c => c.toLowerCase()).includes(col.field.toLowerCase());
     const indexInfo = tableData?.indexes.find(index => 
       index.columns.map(c => c.toLowerCase()).includes(col.field.toLowerCase())
     );
@@ -133,7 +134,7 @@ export default function ResultsGrid({
       renderCell: relation ? (params: GridRenderCellParams) => (
         <Link
           component="button"
-          onClick={() => onRelatedTableClick?.(relation.relatedTable, params.value)}
+          onClick={() => onRelatedTableClick?.(relation.relatedTable, params.value, relation.constraints)}
           sx={{
             textDecoration: 'underline',
             color: '#1976d2 !important',

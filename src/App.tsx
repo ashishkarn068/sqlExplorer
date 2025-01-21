@@ -19,6 +19,10 @@ function App() {
   const [indexedColumns, setIndexedColumns] = useState<string[]>([]);
   const [tableData, setTableData] = useState<{ indexes: Array<{ indexName: string; columns: string[] }> }>({ indexes: [] });
   const [activeTableName, setActiveTableName] = useState<string>('');
+  const [relatedResults, setRelatedResults] = useState<any[]>([]);
+  const [relatedColumns, setRelatedColumns] = useState<any[]>([]);
+  const [relatedIndexedColumns, setRelatedIndexedColumns] = useState<string[]>([]);
+  const [relatedTableData, setRelatedTableData] = useState<{ indexes: Array<{ indexName: string; columns: string[] }> }>({ indexes: [] });
 
   useEffect(() => {
     const fetchDatabases = async () => {
@@ -65,8 +69,14 @@ function App() {
     setColumns([]);
   };
 
+  const clearRelatedResults = () => {
+    setRelatedResults([]);
+    setRelatedColumns([]);
+  };
+
   const handleQuerySubmit = async (params: QueryParams) => {
     clearResults();
+    clearRelatedResults();
     setLoading(true);
     setActiveTableName('');
     
@@ -173,6 +183,7 @@ function App() {
 
   const handleSqlQuerySubmit = async (query: string) => {
     clearResults();
+    clearRelatedResults();
     setLoading(true);
     setActiveTableName('');
     
@@ -225,13 +236,31 @@ function App() {
     }
   };
 
-  const handleRelatedTableClick = async (targetTable: string, columnValue: any) => {
-    clearResults();
+  const handleRelatedTableClick = async (targetTable: string, columnValue: any, constraints: Array<{ field: string; relatedField: string }> = []) => {
     setLoading(true);
     setActiveTableName('');
     
     try {
-      const query = `SELECT * FROM [${targetTable}] WHERE [Id] = '${columnValue}'`;
+      // Construct the WHERE clause using the relatedField from constraints
+      const whereClauses = constraints.map(({ relatedField }) => {
+        return `[${relatedField}] = '${columnValue}'`;
+      }).join(' AND ');
+
+      const query = `SELECT * FROM [${targetTable}] WHERE ${whereClauses}`;
+      console.log('Executing SQL Query:', query);
+
+      // Fetch indexed columns and table index data for the related table
+      const [indexedColumnsResponse, tableIndexResponse] = await Promise.all([
+        fetch(`http://localhost:3001/api/indexed-columns/${targetTable}`),
+        fetch(`http://localhost:3001/api/table-index/${targetTable}`)
+      ]);
+
+      const [indexedColumnsData, tableIndexData] = await Promise.all([
+        indexedColumnsResponse.json(),
+        tableIndexResponse.json()
+      ]);
+
+      // Execute the main query
       const response = await fetch('http://localhost:3001/api/query', {
         method: 'POST',
         headers: {
@@ -263,11 +292,14 @@ function App() {
             headerName: key,
             flex: 1,
           }));
-        setColumns(gridColumns);
+        setRelatedColumns(gridColumns);
       }
 
-      setResults(data);
+      setRelatedResults(data);
       setActiveTableName(targetTable.toUpperCase());
+      // Update the related table's indexed columns and table data
+      setRelatedIndexedColumns(indexedColumnsData);
+      setRelatedTableData(tableIndexData);
     } catch (error) {
       console.error('Error executing related table query:', error);
       alert('Error executing related table query. Check console for details.');
@@ -460,9 +492,24 @@ function App() {
             indexedColumns={indexedColumns}
             tableName={activeTableName}
             tableData={tableData}
-            onRelatedTableClick={handleRelatedTableClick}
+            onRelatedTableClick={(tableName, columnValue, constraints) => handleRelatedTableClick(tableName, columnValue, constraints)}
           />
         </Box>
+
+        {/* Related Results Section */}
+        {relatedResults.length > 0 && (
+          <Box sx={{ mt: 2, minHeight: 400 }}>
+            <ResultsGrid
+              rows={relatedResults}
+              columns={relatedColumns}
+              loading={loading}
+              tableName={activeTableName}
+              indexedColumns={relatedIndexedColumns}
+              tableData={relatedTableData}
+              onRelatedTableClick={(tableName, columnValue, constraints) => handleRelatedTableClick(tableName, columnValue, constraints)}
+            />
+          </Box>
+        )}
       </Box>
     </Box>
   );
