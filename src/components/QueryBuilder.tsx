@@ -1,4 +1,4 @@
-import { useState, KeyboardEvent } from 'react';
+import { useState } from 'react';
 import {
   Paper,
   Box,
@@ -24,6 +24,8 @@ interface QueryBuilderProps {
   selectedTable: Table | null;
   onTableChange: (table: Table | null) => void;
   onQuerySubmit: (params: QueryParams) => void;
+  onSqlQuerySubmit: (query: string) => void;
+  isLoading: boolean;
 }
 
 export default function QueryBuilder({
@@ -31,6 +33,8 @@ export default function QueryBuilder({
   selectedTable,
   onTableChange,
   onQuerySubmit,
+  onSqlQuerySubmit,
+  isLoading
 }: QueryBuilderProps) {
   const [whereColumn, setWhereColumn] = useState('');
   const [whereValue, setWhereValue] = useState('');
@@ -41,9 +45,7 @@ export default function QueryBuilder({
 
   const handleSubmit = () => {
     if (sqlCommand.trim()) {
-      onQuerySubmit({
-        rawQuery: sqlCommand
-      });
+      alert('Please use the Execute button in the SQL Command section to run SQL queries');
       return;
     }
 
@@ -69,10 +71,38 @@ export default function QueryBuilder({
     setSqlCommand('');
   };
 
-  const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-      handleSubmit();
+  const handleSqlExecute = () => {
+    const query = sqlCommand.trim();
+    if (!query) {
+      alert('Please enter a SQL query');
+      return;
     }
+
+    // Basic SQL query validation
+    if (!query.toLowerCase().startsWith('select')) {
+      alert('Only SELECT queries are allowed');
+      return;
+    }
+
+    // Ensure the query has a FROM clause
+    if (!query.toLowerCase().includes('from')) {
+      alert('Query must include a FROM clause');
+      return;
+    }
+
+    // Extract table name and validate existence
+    const fromMatch = query.match(/from\s+([^\s;]+)/i);
+    if (fromMatch) {
+      const tableName = fromMatch[1].replace(/[\[\]]/g, '');
+      if (!tables.some(t => t.name.toLowerCase() === tableName.toLowerCase())) {
+        alert(`Table "${tableName}" does not exist in the database`);
+        return;
+      }
+    }
+
+    onSqlQuerySubmit(query);
+    setSqlCommand('');
+    setSqlCommandOpen(false);
   };
 
   return (
@@ -91,7 +121,7 @@ export default function QueryBuilder({
           Query Builder
         </Typography>
 
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 1 }}>
           {/* Table Selection */}
           <Paper 
             elevation={0} 
@@ -105,8 +135,8 @@ export default function QueryBuilder({
               gap: 1
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <DatabaseIcon size={12} className="text-gray-600" />
+            <Box sx={{ display: 'flex', alignItems: 'center', height: 20 }}>
+              <DatabaseIcon size={14} className="text-gray-600" />
               <Typography variant="body2" sx={{ ml: 1, fontSize: 12 }}>Table</Typography>
             </Box>
             <Autocomplete
@@ -115,6 +145,22 @@ export default function QueryBuilder({
               getOptionLabel={(option) => option.name}
               value={selectedTable}
               onChange={(_, newValue) => onTableChange(newValue)}
+              renderOption={(props, option) => {
+                const { key, style, ...otherProps } = props;
+                return (
+                  <li 
+                    key={key}
+                    {...otherProps}
+                    style={{ 
+                      ...style,
+                      fontSize: '11px', 
+                      padding: '2px 8px' 
+                    }}
+                  >
+                    {option.name}
+                  </li>
+                );
+              }}
               renderInput={(params) => (
                 <TextField 
                   {...params} 
@@ -123,13 +169,75 @@ export default function QueryBuilder({
                   size="small"
                   InputProps={{
                     ...params.InputProps,
-                    style: { fontSize: 13 }
+                    style: { fontSize: 11 }
                   }}
                   InputLabelProps={{
-                    style: { fontSize: 13 }
+                    style: { fontSize: 12 }
+                  }}
+                  sx={{
+                    '& .MuiInputBase-root': {
+                      height: '28px',
+                      '& input': {
+                        padding: '6px 8px',
+                        fontSize: 11,
+                        height: '16px'
+                      },
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#e2e8f0'
+                      },
+                      padding: '0'
+                    },
+                    '& .MuiInputLabel-root': { 
+                      fontSize: 12,
+                      transform: 'translate(14px, 6px) scale(1)'
+                    },
+                    '& .MuiInputLabel-shrink': {
+                      transform: 'translate(14px, -9px) scale(0.75)'
+                    },
+                    '& .MuiAutocomplete-endAdornment': {
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      right: 2,
+                      display: 'flex',
+                      flexDirection: 'row',
+                      '& .MuiButtonBase-root': {
+                        padding: 0
+                      },
+                      '& .MuiAutocomplete-clearIndicator': {
+                        order: 0
+                      },
+                      '& .MuiAutocomplete-popupIndicator': {
+                        order: 1
+                      }
+                    }
                   }}
                 />
               )}
+              sx={{
+                '& .MuiAutocomplete-option': {
+                  fontSize: 11,
+                  py: 0,
+                  minHeight: 'unset',
+                  lineHeight: '1.2'
+                },
+                '& .MuiAutocomplete-listbox': {
+                  '& li': {
+                    fontSize: 11,
+                    minHeight: 'unset',
+                    padding: '2px 8px'
+                  }
+                },
+                '& .MuiAutocomplete-input': {
+                  fontSize: 11,
+                  padding: '6px 8px !important'
+                },
+                '& .MuiAutocomplete-clearIndicator': {
+                  visibility: 'hidden'
+                },
+                '&:hover .MuiAutocomplete-clearIndicator': {
+                  visibility: whereColumn ? 'visible' : 'hidden'
+                }
+              }}
             />
           </Paper>
 
@@ -146,31 +254,128 @@ export default function QueryBuilder({
               gap: 1
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Filter size={12} className="text-gray-600" />
-              <Typography variant="body2" sx={{ ml: 1, fontSize: 12 }}>Filter</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <FormControl size="small" sx={{ width: '40%' }}>
-                <InputLabel sx={{ fontSize: 13 }}>Column</InputLabel>
-                <Select
-                  value={whereColumn}
-                  label="Column"
-                  onChange={(e) => setWhereColumn(e.target.value)}
-                  sx={{
-                    fontSize: 13,
-                    '& .MuiMenuItem-root': {
-                      fontSize: 13
-                    }
+            <Box sx={{ display: 'flex', alignItems: 'center', height: 20, justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Filter size={14} className="text-gray-600" style={{ marginTop: -2 }} />
+                <Typography variant="body2" sx={{ ml: 1, fontSize: 12 }}>Filter</Typography>
+              </Box>
+              <Tooltip title="Clear filters" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => {
+                    setWhereColumn('');
+                    setWhereValue('');
+                  }}
+                  sx={{ 
+                    p: 0.5,
+                    visibility: whereColumn || whereValue ? 'visible' : 'hidden'
                   }}
                 >
-                  {selectedTable?.columns.map((column) => (
-                    <MenuItem key={column.name} value={column.name}>
-                      {column.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                  <X size={14} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Autocomplete
+                size="small"
+                options={selectedTable?.columns.map(col => col.name) || []}
+                value={whereColumn}
+                onChange={(_, newValue) => setWhereColumn(newValue || '')}
+                renderOption={(props, option) => {
+                  const { key, style, ...otherProps } = props;
+                  return (
+                    <li 
+                      key={key}
+                      {...otherProps}
+                      style={{ 
+                        ...style,
+                        fontSize: '11px', 
+                        padding: '2px 8px' 
+                      }}
+                    >
+                      {option}
+                    </li>
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="Column" 
+                    variant="outlined"
+                    size="small"
+                    InputProps={{
+                      ...params.InputProps,
+                      style: { fontSize: 11 }
+                    }}
+                    InputLabelProps={{
+                      style: { fontSize: 12 }
+                    }}
+                    sx={{
+                      '& .MuiInputBase-root': {
+                        height: '28px',
+                        '& input': {
+                          padding: '6px 8px',
+                          fontSize: 11,
+                          height: '16px'
+                        },
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#e2e8f0'
+                        },
+                        padding: '0'
+                      },
+                      '& .MuiInputLabel-root': { 
+                        fontSize: 12,
+                        transform: 'translate(14px, 6px) scale(1)'
+                      },
+                      '& .MuiInputLabel-shrink': {
+                        transform: 'translate(14px, -9px) scale(0.75)'
+                      },
+                      '& .MuiAutocomplete-endAdornment': {
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        right: 2,
+                        display: 'flex',
+                        flexDirection: 'row',
+                        '& .MuiButtonBase-root': {
+                          padding: 0
+                        },
+                        '& .MuiAutocomplete-clearIndicator': {
+                          order: 0
+                        },
+                        '& .MuiAutocomplete-popupIndicator': {
+                          order: 1
+                        }
+                      }
+                    }}
+                  />
+                )}
+                sx={{
+                  width: '40%',
+                  '& .MuiAutocomplete-option': {
+                    fontSize: 11,
+                    py: 0,
+                    minHeight: 'unset',
+                    lineHeight: '1.2'
+                  },
+                  '& .MuiAutocomplete-listbox': {
+                    '& li': {
+                      fontSize: 11,
+                      minHeight: 'unset',
+                      padding: '2px 8px'
+                    }
+                  },
+                  '& .MuiAutocomplete-input': {
+                    fontSize: 11,
+                    padding: '6px 8px !important'
+                  },
+                  '& .MuiAutocomplete-clearIndicator': {
+                    visibility: 'hidden'
+                  },
+                  '&:hover .MuiAutocomplete-clearIndicator': {
+                    visibility: whereColumn ? 'visible' : 'hidden'
+                  }
+                }}
+              />
               <TextField
                 size="small"
                 label="Value"
@@ -178,8 +383,17 @@ export default function QueryBuilder({
                 onChange={(e) => setWhereValue(e.target.value)}
                 sx={{ 
                   flex: 1,
-                  '& .MuiInputBase-input': { fontSize: 13 },
-                  '& .MuiInputLabel-root': { fontSize: 13 }
+                  '& .MuiInputBase-input': { 
+                    fontSize: 11,
+                    padding: '6px 8px'
+                  },
+                  '& .MuiInputLabel-root': { 
+                    fontSize: 12,
+                    transform: 'translate(14px, 6px) scale(1)'
+                  },
+                  '& .MuiInputLabel-shrink': {
+                    transform: 'translate(14px, -9px) scale(0.75)'
+                  }
                 }}
               />
             </Box>
@@ -198,50 +412,93 @@ export default function QueryBuilder({
               gap: 1
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', height: 20 }}>
               {orderDirection === 'asc' ? (
-                <SortAsc size={12} className="text-gray-600" />
+                <SortAsc size={14} className="text-gray-600" style={{ marginTop: -2 }} />
               ) : (
-                <SortDesc size={12} className="text-gray-600" />
+                <SortDesc size={14} className="text-gray-600" style={{ marginTop: -2 }} />
               )}
               <Typography variant="body2" sx={{ ml: 1, fontSize: 12 }}>Sort</Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <FormControl size="small" sx={{ flex: 2 }}>
-                <InputLabel sx={{ fontSize: 13 }}>Order By</InputLabel>
+                <InputLabel sx={{ fontSize: 12 }}>Order By</InputLabel>
                 <Select
                   value={orderByColumn}
                   label="Order By"
                   onChange={(e) => setOrderByColumn(e.target.value)}
                   sx={{
-                    fontSize: 13,
+                    fontSize: 11,
+                    '& .MuiSelect-select': {
+                      fontSize: 11,
+                      padding: '6px 8px'
+                    },
                     '& .MuiMenuItem-root': {
-                      fontSize: 13
+                      fontSize: 11,
+                      minHeight: 'unset',
+                      padding: '2px 8px',
+                      lineHeight: '1.2'
                     }
                   }}
                 >
                   {selectedTable?.columns.map((column) => (
-                    <MenuItem key={column.name} value={column.name}>
+                    <MenuItem 
+                      key={column.name} 
+                      value={column.name}
+                      sx={{
+                        fontSize: 11,
+                        minHeight: 'unset',
+                        padding: '2px 8px',
+                        lineHeight: '1.2'
+                      }}
+                    >
                       {column.name}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
               <FormControl size="small" sx={{ flex: 1 }}>
-                <InputLabel sx={{ fontSize: 13 }}>Direction</InputLabel>
+                <InputLabel sx={{ fontSize: 12 }}>Direction</InputLabel>
                 <Select
                   value={orderDirection}
                   label="Direction"
                   onChange={(e) => setOrderDirection(e.target.value as 'asc' | 'desc')}
                   sx={{
-                    fontSize: 13,
+                    fontSize: 11,
+                    '& .MuiSelect-select': {
+                      fontSize: 11,
+                      padding: '6px 8px'
+                    },
                     '& .MuiMenuItem-root': {
-                      fontSize: 13
+                      fontSize: 11,
+                      minHeight: 'unset',
+                      padding: '2px 8px',
+                      lineHeight: '1.2'
                     }
                   }}
                 >
-                  <MenuItem value="asc">ASC</MenuItem>
-                  <MenuItem value="desc">DESC</MenuItem>
+                  <MenuItem 
+                    value="asc"
+                    sx={{
+                      fontSize: 11,
+                      minHeight: 'unset',
+                      padding: '2px 8px',
+                      lineHeight: '1.2'
+                    }}
+                  >
+                    ASC
+                  </MenuItem>
+                  <MenuItem 
+                    value="desc"
+                    sx={{
+                      fontSize: 11,
+                      minHeight: 'unset',
+                      padding: '2px 8px',
+                      lineHeight: '1.2'
+                    }}
+                  >
+                    DESC
+                  </MenuItem>
                 </Select>
               </FormControl>
             </Box>
@@ -251,34 +508,43 @@ export default function QueryBuilder({
           <Button
             variant="contained"
             onClick={handleSubmit}
-            startIcon={<Search size={16} />}
+            disabled={isLoading}
+            startIcon={<Search size={14} />}
             size="small"
             sx={{
               bgcolor: '#3b82f6',
               '&:hover': {
                 bgcolor: '#2563eb',
               },
+              '&:disabled': {
+                bgcolor: '#94a3b8',
+                color: 'white'
+              },
               height: '40px',  // More reasonable height
               alignSelf: 'flex-end',  // Align with the bottom of other components
               mt: 'auto',  // Push to bottom of container
               mb: 1,  // Add some bottom margin
-              px: 2,  // Add horizontal padding
-              fontSize: 13,
+              //px: 2,  // Add horizontal padding
+              fontSize: 12,
               textTransform: 'none'  // Prevent all-caps
             }}
           >
-            Execute
+            {isLoading ? 'Executing...' : 'Execute'}
           </Button>
         </Box>
 
         {/* SQL Command Section */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 32 }}>
           <Button
             size="small"
-            startIcon={<Code size={16} />}
-            endIcon={sqlCommandOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            startIcon={<Code size={14} style={{ marginTop: -2 }} />}
+            endIcon={sqlCommandOpen ? <ChevronUp size={14} style={{ marginTop: -2 }} /> : <ChevronDown size={14} style={{ marginTop: -2 }} />}
             onClick={() => setSqlCommandOpen(!sqlCommandOpen)}
-            sx={{ fontSize: 13 }}
+            sx={{ 
+              fontSize: 12,
+              height: 24,
+              padding: '4px 8px'
+            }}
           >
             SQL Command
           </Button>
@@ -294,6 +560,16 @@ export default function QueryBuilder({
             }}
           >
             <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+              <Tooltip title="Execute SQL" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={handleSqlExecute}
+                  disabled={isLoading}
+                  sx={{ p: 0.5 }}
+                >
+                  <Search size={14} />
+                </IconButton>
+              </Tooltip>
               <Tooltip title="Copy" arrow>
                 <IconButton 
                   size="small" 
@@ -330,7 +606,12 @@ export default function QueryBuilder({
                 fontSize: 13,
                 fontFamily: 'monospace'
               }}
-              onKeyDown={handleKeyDown}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  handleSqlExecute();
+                }
+              }}
             />
           </Paper>
         </Collapse>

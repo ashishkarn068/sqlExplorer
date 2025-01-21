@@ -16,6 +16,13 @@ function App() {
   const [tables, setTables] = useState<Table[]>([]);
   const [columns, setColumns] = useState<any[]>([]);
   const [isLoadingTables, setIsLoadingTables] = useState(false);
+  const [indexedColumns, setIndexedColumns] = useState<string[]>([]);
+  const [tableData, setTableData] = useState<{ indexes: Array<{ indexName: string; columns: string[] }> }>({ indexes: [] });
+  const [activeTableName, setActiveTableName] = useState<string>('');
+  const [relatedResults, setRelatedResults] = useState<any[]>([]);
+  const [relatedColumns, setRelatedColumns] = useState<any[]>([]);
+  const [relatedIndexedColumns, setRelatedIndexedColumns] = useState<string[]>([]);
+  const [relatedTableData, setRelatedTableData] = useState<{ indexes: Array<{ indexName: string; columns: string[] }> }>({ indexes: [] });
 
   useEffect(() => {
     const fetchDatabases = async () => {
@@ -62,12 +69,24 @@ function App() {
     setColumns([]);
   };
 
+  const clearRelatedResults = () => {
+    setRelatedResults([]);
+    setRelatedColumns([]);
+  };
+
   const handleQuerySubmit = async (params: QueryParams) => {
     clearResults();
+    clearRelatedResults();
     setLoading(true);
+    setActiveTableName('');
     
     try {
       console.log('Submitting query:', params);
+      // Ensure we're only handling QueryBuilder queries
+      if (params.rawQuery) {
+        throw new Error('Raw SQL queries should be executed from SQL Command section');
+      }
+
       const response = await fetch('http://localhost:3001/api/query', {
         method: 'POST',
         headers: {
@@ -103,9 +122,12 @@ function App() {
       }
 
       setResults(data);
+      // Set table name from QueryBuilder
+      setActiveTableName(params.tableName ? params.tableName.toUpperCase() : '');
     } catch (error) {
       console.error('Error executing query:', error);
       alert('Error executing query. Check console for details.');
+      setActiveTableName('');
     } finally {
       setLoading(false);
     }
@@ -140,6 +162,150 @@ function App() {
       setDatabases(data);
     } catch (error) {
       console.error('Error fetching databases:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTableName) {
+      const fetchIndexedColumns = async () => {
+        const response = await fetch(`http://localhost:3001/api/indexed-columns/${activeTableName}`);
+        const data = await response.json();
+        setIndexedColumns(data);
+        
+        // Set table data with index information
+        const tableIndexResponse = await fetch(`http://localhost:3001/api/table-index/${activeTableName}`);
+        const tableIndexData = await tableIndexResponse.json();
+        setTableData(tableIndexData);
+      };
+      fetchIndexedColumns();
+    }
+  }, [activeTableName]);
+
+  const handleSqlQuerySubmit = async (query: string) => {
+    clearResults();
+    clearRelatedResults();
+    setLoading(true);
+    setActiveTableName('');
+    
+    try {
+      const response = await fetch('http://localhost:3001/api/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          database: selectedDatabase,
+          rawQuery: query
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        console.error('Query error:', data.error);
+        alert(data.error);
+        return;
+      }
+
+      // Extract column information from the first row
+      if (data.length > 0) {
+        const gridColumns = Object.keys(data[0])
+          .filter(key => key !== 'id')
+          .map(key => ({
+            field: key,
+            headerName: key,
+            flex: 1,
+          }));
+        setColumns(gridColumns);
+      }
+
+      setResults(data);
+
+      // Try to extract table name from SQL query
+      const tableMatch = query.match(/FROM\s+\[?(\w+)\]?/i);
+      setActiveTableName(tableMatch ? tableMatch[1].toUpperCase() : '');
+    } catch (error) {
+      console.error('Error executing SQL query:', error);
+      alert('Error executing SQL query. Check console for details.');
+      setActiveTableName('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRelatedTableClick = async (targetTable: string, columnValue: any, constraints: Array<{ field: string; relatedField: string }> = []) => {
+    setLoading(true);
+    setActiveTableName('');
+    
+    try {
+      // Construct the WHERE clause using the relatedField from constraints
+      const whereClauses = constraints.map(({ relatedField }) => {
+        return `[${relatedField}] = '${columnValue}'`;
+      }).join(' AND ');
+
+      const query = `SELECT * FROM [${targetTable}] WHERE ${whereClauses}`;
+      console.log('Executing SQL Query:', query);
+
+      // Fetch indexed columns and table index data for the related table
+      const [indexedColumnsResponse, tableIndexResponse] = await Promise.all([
+        fetch(`http://localhost:3001/api/indexed-columns/${targetTable}`),
+        fetch(`http://localhost:3001/api/table-index/${targetTable}`)
+      ]);
+
+      const [indexedColumnsData, tableIndexData] = await Promise.all([
+        indexedColumnsResponse.json(),
+        tableIndexResponse.json()
+      ]);
+
+      // Execute the main query
+      const response = await fetch('http://localhost:3001/api/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          database: selectedDatabase,
+          rawQuery: query
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        console.error('Query error:', data.error);
+        alert(data.error);
+        return;
+      }
+
+      // Extract column information from the first row
+      if (data.length > 0) {
+        const gridColumns = Object.keys(data[0])
+          .filter(key => key !== 'id')
+          .map(key => ({
+            field: key,
+            headerName: key,
+            flex: 1,
+          }));
+        setRelatedColumns(gridColumns);
+      }
+
+      setRelatedResults(data);
+      setActiveTableName(targetTable.toUpperCase());
+      // Update the related table's indexed columns and table data
+      setRelatedIndexedColumns(indexedColumnsData);
+      setRelatedTableData(tableIndexData);
+    } catch (error) {
+      console.error('Error executing related table query:', error);
+      alert('Error executing related table query. Check console for details.');
+      setActiveTableName('');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -222,23 +388,31 @@ function App() {
               value={selectedDatabase}
               onChange={(e) => handleDatabaseChange(e.target.value)}
               onClick={handleDatabaseClick}
+              size="small"
               displayEmpty
               sx={{
+                fontSize: 13,
                 color: '#f1f5f9',
                 bgcolor: '#1e293b',
-                fontSize: 14,
+                '& .MuiSelect-select': {
+                  color: '#f1f5f9'
+                },
                 '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#334155',
+                  borderColor: '#334155'
                 },
                 '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#475569',
+                  borderColor: '#475569'
                 },
                 '& .MuiSelect-icon': {
-                  color: '#94a3b8',
+                  color: '#94a3b8'
+                },
+                '& .MuiMenuItem-root': {
+                  fontSize: 13,
+                  color: '#1f2937'
                 }
               }}
             >
-              <MenuItem value="" disabled sx={{ fontSize: 14 }}>
+              <MenuItem value="" disabled sx={{ fontSize: 13, color: '#94a3b8' }}>
                 Choose a database
               </MenuItem>
               {databases.map((db) => (
@@ -246,8 +420,8 @@ function App() {
                   key={db.id} 
                   value={db.name}
                   sx={{
-                    fontSize: 14,
-                    color: '#f1f5f9'
+                    fontSize: 13,
+                    color: '#1f2937'
                   }}
                 >
                   {db.name}
@@ -307,6 +481,8 @@ function App() {
             selectedTable={selectedTable}
             onTableChange={setSelectedTable}
             onQuerySubmit={handleQuerySubmit}
+            onSqlQuerySubmit={handleSqlQuerySubmit}
+            isLoading={loading}
           />
         </Box>
 
@@ -321,8 +497,27 @@ function App() {
             rows={results}
             columns={columns}
             loading={loading}
+            indexedColumns={indexedColumns}
+            tableName={activeTableName}
+            tableData={tableData}
+            onRelatedTableClick={(tableName, columnValue, constraints) => handleRelatedTableClick(tableName, columnValue, constraints)}
           />
         </Box>
+
+        {/* Related Results Section */}
+        {relatedResults.length > 0 && (
+          <Box sx={{ mt: 2, minHeight: 400 }}>
+            <ResultsGrid
+              rows={relatedResults}
+              columns={relatedColumns}
+              loading={loading}
+              tableName={activeTableName}
+              indexedColumns={relatedIndexedColumns}
+              tableData={relatedTableData}
+              onRelatedTableClick={(tableName, columnValue, constraints) => handleRelatedTableClick(tableName, columnValue, constraints)}
+            />
+          </Box>
+        )}
       </Box>
     </Box>
   );

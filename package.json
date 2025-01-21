@@ -17,6 +17,7 @@
     "@mui/material": "^5.15.10",
     "@mui/x-data-grid": "^6.19.4",
     "@uiw/react-codemirror": "^4.23.7",
+    "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "lucide-react": "^0.344.0",
     "msnodesqlv8": "^4.4.0",

@@ -1,7 +1,10 @@
 const express = require('express');
 const sql = require('mssql/msnodesqlv8');
 const cors = require('cors');
+const DatabaseCache = require('./cache');
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(cors());
@@ -18,6 +21,54 @@ const config = {
     enableArithAbort: true,
     instanceName: 'SQLEXPRESS'
   }
+};
+
+// Load tableIndex.json and store in cache
+const loadTableIndexToCache = () => {
+  const filePath = path.join(__dirname, 'resources', 'tableIndex.json');
+  fs.readFile(filePath, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Error reading tableIndex.json:', err);
+      return;
+    }
+    try {
+      const tableIndexData = JSON.parse(data);
+      DatabaseCache.setTables('tableIndex', tableIndexData);
+      console.log('Table index data cached successfully.');
+      console.log('Available tables in cache:', tableIndexData.map(table => table.tableName));
+    } catch (parseErr) {
+      console.error('Error parsing tableIndex.json:', parseErr);
+    }
+  });
+};
+
+// Call the function to load table index data into cache
+loadTableIndexToCache();
+
+// Load tableRelation.json and store in cache
+const loadTableRelationToCache = () => {
+  const filePath = path.join(__dirname, 'resources', 'tableRelation.json');
+  fs.readFile(filePath, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Error reading tableRelation.json:', err);
+      return;
+    }
+    try {
+      const tableRelationData = JSON.parse(data);
+      DatabaseCache.setTables('tableRelation', tableRelationData);
+      console.log('Table relation data cached successfully.');
+    } catch (parseErr) {
+      console.error('Error parsing tableRelation.json:', parseErr);
+    }
+  });
+};
+
+// Call the function to load table relation data into cache
+loadTableRelationToCache();
+
+// Ensure case-insensitive comparisons
+const caseInsensitiveFind = (array, key, value) => {
+  return array.find(item => item[key].toLowerCase() === value.toLowerCase());
 };
 
 // API endpoint to get databases
@@ -39,17 +90,26 @@ app.get('/api/databases', async (req, res) => {
   } catch (err) {
     console.error('Database Error:', err);
     res.status(500).json({ error: err.message });
-  } finally {
-    await sql.close();
   }
 });
 
 // API endpoint to get tables for a database
 app.get('/api/tables/:database', async (req, res) => {
+  const dbName = req.params.database;
+  console.log('Fetching tables for database:', dbName);
+  
   try {
+    // Check cache first
+    const cachedTables = DatabaseCache.getTables(dbName);
+    if (cachedTables) {
+      console.log('Returning cached tables for:', dbName);
+      return res.json(cachedTables);
+    }
+
+    // If not in cache, fetch from database
     const dbConfig = {
       ...config,
-      database: req.params.database
+      database: dbName
     };
 
     const pool = await sql.connect(dbConfig);
@@ -63,7 +123,7 @@ app.get('/api/tables/:database', async (req, res) => {
       JOIN INFORMATION_SCHEMA.COLUMNS c 
         ON t.TABLE_NAME = c.TABLE_NAME
       WHERE t.TABLE_TYPE = 'BASE TABLE'
-        AND t.TABLE_CATALOG = '${req.params.database}'
+        AND t.TABLE_CATALOG = '${dbName}'
       ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION
     `);
 
@@ -91,12 +151,14 @@ app.get('/api/tables/:database', async (req, res) => {
       tables.push(currentTable);
     }
 
+    // Store in cache
+    DatabaseCache.setTables(dbName, tables);
+    console.log(`Cached ${tables.length} tables for database:`, dbName);
+
     res.json(tables);
   } catch (err) {
     console.error('Error:', err);
     res.status(500).json({ error: err.message });
-  } finally {
-    await sql.close();
   }
 });
 
@@ -154,37 +216,77 @@ app.post('/api/query', async (req, res) => {
       error: err.message,
       details: 'Error executing query'
     });
-  } finally {
-    await sql.close();
   }
 });
 
-// Update test connection endpoint
-app.get('/api/test-connection/:database', async (req, res) => {
-  const { database } = req.params;
+// API endpoint to get indexed columns for a table
+app.get('/api/indexed-columns/:tableName', (req, res) => {
+  const tableName = req.params.tableName;
+  console.log('Fetching indexed columns for table:', tableName);
+
+  // Retrieve table index data from cache
+  const tableIndexData = DatabaseCache.getTables('tableIndex');
+  if (!tableIndexData) {
+    console.error('Table index data not found in cache');
+    return res.status(404).json({ error: 'Table index data not found in cache' });
+  }
+
+  // Log available table names in cache
+  console.log('Available tables in cache:', tableIndexData.map(table => table.tableName.toLowerCase()));
+
+  // Find the indexed columns for the specified table
+  const tableData = tableIndexData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
+  if (!tableData) {
+    console.error('Table not found in index data');
+    return res.status(404).json({ error: 'Table not found in index data' });
+  }
+
+  // Collect all indexed columns
+  const indexedColumns = tableData.indexes.flatMap(index => index.columns);
+  res.json(indexedColumns);
+});
+
+// API endpoint to get table index information
+app.get('/api/table-index/:tableName', async (req, res) => {
+  const { tableName } = req.params;
+  const tableIndexData = DatabaseCache.getTables('tableIndex');
   
-  try {
-    const pool = new sql.ConnectionPool({
-      ...config,
-      database: database,
-    });
-
-    await pool.connect();
-    console.log(`Successfully connected to database: ${database}`);
-    await pool.close();
-    
-    res.json({ success: true, message: 'Connection successful' });
-  } catch (error) {
-    console.error('SQL Server Connection Error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Connection failed', 
-      error: error.message 
-    });
+  if (!tableIndexData) {
+    console.log(`No index information found for table: ${tableName}`);
+    return res.json({ indexes: [] });
   }
+  
+  const tableData = tableIndexData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
+  
+  if (!tableData) {
+    console.log(`No index information found for table: ${tableName}`);
+    return res.json({ indexes: [] });
+  }
+  
+  res.json(tableData);
 });
 
-const PORT = process.env.PORT || 1433;
+// API endpoint to get table relation information
+app.get('/api/table-relation/:tableName', async (req, res) => {
+  const { tableName } = req.params;
+  const tableRelationData = DatabaseCache.getTables('tableRelation');
+  
+  if (!tableRelationData) {
+    console.log(`No relation information found for table: ${tableName}`);
+    return res.json({ relations: [] });
+  }
+  
+  const tableData = tableRelationData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
+  
+  if (!tableData) {
+    console.log(`No relation information found for table: ${tableName}`);
+    return res.json({ relations: [] });
+  }
+  
+  res.json(tableData);
+});
+
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-}); 
+});
