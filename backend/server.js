@@ -164,7 +164,7 @@ app.get('/api/tables/:database', async (req, res) => {
 
 // API endpoint to execute queries
 app.post('/api/query', async (req, res) => {
-  const { database, rawQuery, tableName, orderByColumn, orderDirection, pageSize = 25 } = req.body;
+  const { database, rawQuery, tableName, orderByColumn, orderDirection = 'ASC', pageSize = 25, page = 0 } = req.body;
 
   try {
     const pool = await sql.connect({
@@ -172,27 +172,59 @@ app.post('/api/query', async (req, res) => {
       database: database
     });
     let query;
+    let countQuery;
 
     if (rawQuery) {
-      // For raw SQL queries, wrap with TOP clause
-      const topClause = `TOP ${pageSize}`;
-      query = rawQuery.replace(/^SELECT\s+/i, `SELECT ${topClause} `);
-    } else {
-      // For built queries, add TOP clause
-      query = `SELECT TOP ${pageSize} * FROM [${tableName}]`;
-      if (orderByColumn) {
-        query += ` ORDER BY [${orderByColumn}] ${orderDirection || 'ASC'}`;
+      // For raw SQL queries
+      const offset = page * pageSize;
+      // Extract the base query without any existing ORDER BY or OFFSET
+      let baseQuery = rawQuery.replace(/\bORDER\s+BY\s+[^;]+/i, '').trim();
+      baseQuery = baseQuery.replace(/\bOFFSET\s+\d+\s+ROWS\s+FETCH\s+NEXT\s+\d+\s+ROWS\s+ONLY\s*/i, '').trim();
+      
+      // Add ORDER BY if not present (required for OFFSET-FETCH)
+      if (!baseQuery.toLowerCase().includes('order by')) {
+        baseQuery += ' ORDER BY (SELECT NULL)';
       }
-      console.log('Executing built SQL:', query);
+
+      query = `${baseQuery} OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY`;
+      // Count query to get total rows
+      countQuery = `SELECT COUNT(*) as total FROM (${baseQuery}) as subquery`;
+    } else {
+      // For built queries
+      const offset = page * pageSize;
+      query = `SELECT * FROM [${tableName}]`;
+      if (orderByColumn) {
+        query += ` ORDER BY [${orderByColumn}] ${orderDirection}`;
+      } else {
+        query += ` ORDER BY (SELECT NULL)`; // Default order when none specified
+      }
+      query += ` OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY`;
+      
+      // Count query for total rows
+      countQuery = `SELECT COUNT(*) as total FROM [${tableName}]`;
     }
 
-    const result = await pool.request().query(query);
+    console.log('Executing query:', query);
+    console.log('Executing count query:', countQuery);
+
+    // Execute both queries in parallel
+    const [result, countResult] = await Promise.all([
+      pool.request().query(query),
+      pool.request().query(countQuery)
+    ]);
+
+    const totalRows = countResult.recordset[0].total;
     const rowsWithIds = result.recordset.map((row, index) => ({
       ...row,
-      id: index
+      id: page * pageSize + index // Ensure IDs are unique across pages
     }));
 
-    res.json(rowsWithIds);
+    res.json({
+      rows: rowsWithIds,
+      totalRows,
+      page,
+      pageSize
+    });
   } catch (error) {
     console.error('Error executing query:', error);
     res.status(500).json({ error: error.message });
@@ -204,66 +236,119 @@ app.get('/api/indexed-columns/:tableName', (req, res) => {
   const tableName = req.params.tableName;
   console.log('Fetching indexed columns for table:', tableName);
 
-  // Retrieve table index data from cache
-  const tableIndexData = DatabaseCache.getTables('tableIndex');
-  if (!tableIndexData) {
-    console.error('Table index data not found in cache');
-    return res.status(404).json({ error: 'Table index data not found in cache' });
+  // Check cache first
+  const cachedIndexData = DatabaseCache.getTableIndex(tableName);
+  if (cachedIndexData) {
+    console.log('Returning cached index data for:', tableName);
+    return res.json(cachedIndexData.indexes.flatMap(index => index.columns));
   }
 
-  // Log available table names in cache
-  console.log('Available tables in cache:', tableIndexData.map(table => table.tableName.toLowerCase()));
+  // If not in cache, read from file
+  const filePath = path.join(__dirname, 'resources', 'tableIndex.json');
+  fs.readFile(filePath, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Error reading tableIndex.json:', err);
+      return res.status(404).json({ error: 'Table index data not found' });
+    }
+    try {
+      const tableIndexData = JSON.parse(data);
+      const tableData = tableIndexData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
+      
+      if (!tableData) {
+        console.error('Table not found in index data');
+        return res.status(404).json({ error: 'Table not found in index data' });
+      }
 
-  // Find the indexed columns for the specified table
-  const tableData = tableIndexData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
-  if (!tableData) {
-    console.error('Table not found in index data');
-    return res.status(404).json({ error: 'Table not found in index data' });
-  }
+      // Store in cache
+      DatabaseCache.setTableIndex(tableName, tableData);
+      console.log('Cached index data for table:', tableName);
 
-  // Collect all indexed columns
-  const indexedColumns = tableData.indexes.flatMap(index => index.columns);
-  res.json(indexedColumns);
+      // Return indexed columns
+      const indexedColumns = tableData.indexes.flatMap(index => index.columns);
+      res.json(indexedColumns);
+    } catch (parseErr) {
+      console.error('Error parsing tableIndex.json:', parseErr);
+      res.status(500).json({ error: 'Error parsing table index data' });
+    }
+  });
 });
 
 // API endpoint to get table index information
 app.get('/api/table-index/:tableName', async (req, res) => {
   const { tableName } = req.params;
-  const tableIndexData = DatabaseCache.getTables('tableIndex');
-  
-  if (!tableIndexData) {
-    console.log(`No index information found for table: ${tableName}`);
-    return res.json({ indexes: [] });
+
+  // Check cache first
+  const cachedIndexData = DatabaseCache.getTableIndex(tableName);
+  if (cachedIndexData) {
+    console.log('Returning cached index data for:', tableName);
+    return res.json(cachedIndexData);
   }
-  
-  const tableData = tableIndexData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
-  
-  if (!tableData) {
-    console.log(`No index information found for table: ${tableName}`);
-    return res.json({ indexes: [] });
-  }
-  
-  res.json(tableData);
+
+  // If not in cache, read from file
+  const filePath = path.join(__dirname, 'resources', 'tableIndex.json');
+  fs.readFile(filePath, 'utf8', (err, data) => {
+    if (err) {
+      console.log(`No index information found for table: ${tableName}`);
+      return res.json({ indexes: [] });
+    }
+    try {
+      const tableIndexData = JSON.parse(data);
+      const tableData = tableIndexData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
+      
+      if (!tableData) {
+        console.log(`No index information found for table: ${tableName}`);
+        return res.json({ indexes: [] });
+      }
+
+      // Store in cache
+      DatabaseCache.setTableIndex(tableName, tableData);
+      console.log('Cached index data for table:', tableName);
+      
+      res.json(tableData);
+    } catch (parseErr) {
+      console.error('Error parsing tableIndex.json:', parseErr);
+      res.json({ indexes: [] });
+    }
+  });
 });
 
 // API endpoint to get table relation information
 app.get('/api/table-relation/:tableName', async (req, res) => {
   const { tableName } = req.params;
-  const tableRelationData = DatabaseCache.getTables('tableRelation');
-  
-  if (!tableRelationData) {
-    console.log(`No relation information found for table: ${tableName}`);
-    return res.json({ relations: [] });
+
+  // Check cache first
+  const cachedRelationData = DatabaseCache.getTableRelation(tableName);
+  if (cachedRelationData) {
+    console.log('Returning cached relation data for:', tableName);
+    return res.json(cachedRelationData);
   }
-  
-  const tableData = tableRelationData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
-  
-  if (!tableData) {
-    console.log(`No relation information found for table: ${tableName}`);
-    return res.json({ relations: [] });
-  }
-  
-  res.json(tableData);
+
+  // If not in cache, read from file
+  const filePath = path.join(__dirname, 'resources', 'tableRelations.json');
+  fs.readFile(filePath, 'utf8', (err, data) => {
+    if (err) {
+      console.log(`No relation information found for table: ${tableName}`);
+      return res.json({ relations: [] });
+    }
+    try {
+      const tableRelationData = JSON.parse(data);
+      const tableData = tableRelationData.find(table => table.tableName.toLowerCase() === tableName.toLowerCase());
+      
+      if (!tableData) {
+        console.log(`No relation information found for table: ${tableName}`);
+        return res.json({ relations: [] });
+      }
+
+      // Store in cache
+      DatabaseCache.setTableRelation(tableName, tableData);
+      console.log('Cached relation data for table:', tableName);
+      
+      res.json(tableData);
+    } catch (parseErr) {
+      console.error('Error parsing tableRelations.json:', parseErr);
+      res.json({ relations: [] });
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3001;
