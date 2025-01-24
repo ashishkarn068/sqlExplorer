@@ -164,38 +164,58 @@ app.get('/api/tables/:database', async (req, res) => {
 
 // API endpoint to execute queries
 app.post('/api/query', async (req, res) => {
-  const { database, rawQuery, tableName, orderByColumn, orderDirection, pageSize = 25 } = req.body;
-
+  const { database, rawQuery, tableName, whereColumn, whereValue, orderByColumn, orderDirection } = req.body;
+  
   try {
+    console.log('Executing query with params:', { database, rawQuery, tableName });
+    
     const pool = await sql.connect({
       ...config,
       database: database
     });
+
     let query;
+    let request = pool.request();
 
     if (rawQuery) {
-      // For raw SQL queries, wrap with TOP clause
-      const topClause = `TOP ${pageSize}`;
-      query = rawQuery.replace(/^SELECT\s+/i, `SELECT ${topClause} `);
+      // Use the raw SQL query if provided
+      query = rawQuery;
+      console.log('Executing raw SQL:', query);
     } else {
-      // For built queries, add TOP clause
-      query = `SELECT TOP ${pageSize} * FROM [${tableName}]`;
+      // Build query from filters
+      query = `SELECT * FROM [${tableName}]`;
+      
+      if (whereColumn && whereValue) {
+        query += ` WHERE [${whereColumn}] = @whereValue`;
+        request.input('whereValue', whereValue);
+      }
+      
       if (orderByColumn) {
         query += ` ORDER BY [${orderByColumn}] ${orderDirection || 'ASC'}`;
       }
       console.log('Executing built SQL:', query);
     }
 
-    const result = await pool.request().query(query);
-    const rowsWithIds = result.recordset.map((row, index) => ({
-      ...row,
-      id: index
+    const result = await request.query(query);
+    
+    // Ensure we're sending an array
+    const rows = Array.isArray(result.recordset) ? result.recordset : [];
+    
+    // Add row IDs if they don't exist
+    const rowsWithIds = rows.map((row, index) => ({
+      id: index,
+      ...row
     }));
 
+    console.log(`Query returned ${rowsWithIds.length} rows`);
     res.json(rowsWithIds);
-  } catch (error) {
-    console.error('Error executing query:', error);
-    res.status(500).json({ error: error.message });
+    
+  } catch (err) {
+    console.error('Query execution error:', err);
+    res.status(500).json({ 
+      error: err.message,
+      details: 'Error executing query'
+    });
   }
 });
 
