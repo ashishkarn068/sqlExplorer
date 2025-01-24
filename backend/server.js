@@ -47,10 +47,10 @@ loadTableIndexToCache();
 
 // Load tableRelation.json and store in cache
 const loadTableRelationToCache = () => {
-  const filePath = path.join(__dirname, 'resources', 'tableRelation.json');
+  const filePath = path.join(__dirname, 'resources', 'tableRelations.json');
   fs.readFile(filePath, 'utf8', (err, data) => {
     if (err) {
-      console.error('Error reading tableRelation.json:', err);
+      console.error('Error reading tableRelations.json:', err);
       return;
     }
     try {
@@ -58,7 +58,7 @@ const loadTableRelationToCache = () => {
       DatabaseCache.setTables('tableRelation', tableRelationData);
       console.log('Table relation data cached successfully.');
     } catch (parseErr) {
-      console.error('Error parsing tableRelation.json:', parseErr);
+      console.error('Error parsing tableRelations.json:', parseErr);
     }
   });
 };
