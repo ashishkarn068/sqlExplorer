@@ -23,11 +23,6 @@ function App() {
   const [relatedColumns, setRelatedColumns] = useState<any[]>([]);
   const [relatedIndexedColumns, setRelatedIndexedColumns] = useState<string[]>([]);
   const [relatedTableData, setRelatedTableData] = useState<{ indexes: Array<{ indexName: string; columns: string[] }> }>({ indexes: [] });
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
-  const [totalRows, setTotalRows] = useState(0);
-  const [lastQueryParams, setLastQueryParams] = useState<QueryParams | null>(null);
-  const [lastRawQuery, setLastRawQuery] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDatabases = async () => {
@@ -84,11 +79,10 @@ function App() {
     clearRelatedResults();
     setLoading(true);
     setActiveTableName('');
-    setLastQueryParams(params);
-    setLastRawQuery(null);
     
     try {
       console.log('Submitting query:', params);
+      // Ensure we're only handling QueryBuilder queries
       if (params.rawQuery) {
         throw new Error('Raw SQL queries should be executed from SQL Command section');
       }
@@ -101,8 +95,6 @@ function App() {
         body: JSON.stringify({
           database: selectedDatabase,
           ...params,
-          page,
-          pageSize
         }),
       });
 
@@ -118,8 +110,8 @@ function App() {
       }
 
       // Extract column information from the first row
-      if (data.rows.length > 0) {
-        const gridColumns = Object.keys(data.rows[0])
+      if (data.length > 0) {
+        const gridColumns = Object.keys(data[0])
           .filter(key => key !== 'id')
           .map(key => ({
             field: key,
@@ -129,8 +121,7 @@ function App() {
         setColumns(gridColumns);
       }
 
-      setResults(data.rows);
-      setTotalRows(data.totalRows);
+      setResults(data);
       // Set table name from QueryBuilder
       setActiveTableName(params.tableName ? params.tableName.toUpperCase() : '');
     } catch (error) {
@@ -195,8 +186,6 @@ function App() {
     clearRelatedResults();
     setLoading(true);
     setActiveTableName('');
-    setLastRawQuery(query);
-    setLastQueryParams(null);
     
     try {
       const response = await fetch('http://localhost:3001/api/query', {
@@ -206,9 +195,7 @@ function App() {
         },
         body: JSON.stringify({
           database: selectedDatabase,
-          rawQuery: query,
-          page,
-          pageSize
+          rawQuery: query
         }),
       });
 
@@ -224,8 +211,8 @@ function App() {
       }
 
       // Extract column information from the first row
-      if (data.rows.length > 0) {
-        const gridColumns = Object.keys(data.rows[0])
+      if (data.length > 0) {
+        const gridColumns = Object.keys(data[0])
           .filter(key => key !== 'id')
           .map(key => ({
             field: key,
@@ -235,8 +222,7 @@ function App() {
         setColumns(gridColumns);
       }
 
-      setResults(data.rows);
-      setTotalRows(data.totalRows);
+      setResults(data);
 
       // Try to extract table name from SQL query
       const tableMatch = query.match(/FROM\s+\[?(\w+)\]?/i);
@@ -322,19 +308,6 @@ function App() {
       setLoading(false);
     }
   };
-
-  // Update effect to use stored query parameters
-  useEffect(() => {
-    if (selectedDatabase && (results.length > 0 || loading)) {
-      if (lastQueryParams) {
-        // Re-run the last query builder query with original parameters
-        handleQuerySubmit(lastQueryParams);
-      } else if (lastRawQuery) {
-        // Re-run the last raw SQL query
-        handleSqlQuerySubmit(lastRawQuery);
-      }
-    }
-  }, [page, pageSize]);
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
@@ -528,11 +501,6 @@ function App() {
             tableName={activeTableName}
             tableData={tableData}
             onRelatedTableClick={(tableName, columnValue, constraints) => handleRelatedTableClick(tableName, columnValue, constraints)}
-            totalRows={totalRows}
-            page={page}
-            pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
           />
         </Box>
 

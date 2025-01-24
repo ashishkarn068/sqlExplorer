@@ -27,11 +27,6 @@ interface ResultsGridProps {
     }>;
   };
   onRelatedTableClick?: (tableName: string, columnValue: any, constraints: Array<{ field: string; relatedField: string }>) => void;
-  totalRows?: number;
-  page?: number;
-  pageSize?: number;
-  onPageChange?: (page: number) => void;
-  onPageSizeChange?: (pageSize: number) => void;
 }
 
 export default function ResultsGrid({ 
@@ -41,12 +36,7 @@ export default function ResultsGrid({
   indexedColumns = [], 
   tableName, 
   tableData,
-  onRelatedTableClick,
-  totalRows = 0,
-  page = 0,
-  pageSize = 25,
-  onPageChange,
-  onPageSizeChange
+  onRelatedTableClick 
 }: ResultsGridProps) {
   const safeRows = Array.isArray(rows) ? rows : [];
   const [highlightEnabled, setHighlightEnabled] = useState(true);
@@ -276,7 +266,7 @@ export default function ResultsGrid({
             {tableName ? `${tableName} - Query Results` : 'Query Results'}
           </Typography>
           <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary', fontSize: 12 }}>
-            {totalRows} rows
+            {safeRows.length} rows
           </Typography>
           <Box sx={{ display: 'flex', gap: 0, ml: 'auto' }}>
             <FormControlLabel
@@ -309,33 +299,17 @@ export default function ResultsGrid({
           }}
         >
           <DataGrid
-            rows={rows}
+            rows={safeRows}
             columns={adjustedColumns.filter(col => 
               !hideEmptyEnabled || filteredColumns.some(fc => fc.field === col.field)
             )}
             loading={loading}
             pagination
-            paginationMode="server"
-            rowCount={totalRows}
-            paginationModel={{ page, pageSize }}
             pageSizeOptions={[25, 50, 100]}
-            onPaginationModelChange={(model) => {
-              if (model.page !== page) {
-                onPageChange?.(model.page);
-              }
-              if (model.pageSize !== pageSize) {
-                onPageSizeChange?.(model.pageSize);
-              }
-            }}
             disableRowSelectionOnClick
-            getRowId={(row) => row.id}
+            getRowId={(row) => row.id || Math.random()}
             autoHeight={false}
             density="compact"
-            initialState={{
-              pagination: {
-                paginationModel: { pageSize: 25, page: 0 },
-              },
-            }}
             sx={{
               border: 'none',
               '& .MuiDataGrid-main': {

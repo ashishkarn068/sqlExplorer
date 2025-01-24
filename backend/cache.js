@@ -1,73 +1,34 @@
 class DatabaseCache {
   constructor() {
-    this.tablesCache = new Map();
-    this.indexCache = new Map();
-    this.relationCache = new Map();
+    this.cache = new Map();
   }
 
-  // Tables cache methods
+  // Set tables for a database
   setTables(databaseName, tables) {
-    this.tablesCache.set(databaseName, {
+    this.cache.set(databaseName, {
       tables,
       timestamp: Date.now()
     });
   }
 
+  // Get tables for a database
   getTables(databaseName) {
-    return this.tablesCache.get(databaseName)?.tables;
+    return this.cache.get(databaseName)?.tables;
   }
 
+  // Check if database tables are cached
   hasTables(databaseName) {
-    return this.tablesCache.has(databaseName);
+    return this.cache.has(databaseName);
   }
 
-  // Index cache methods
-  setTableIndex(tableName, indexData) {
-    this.indexCache.set(tableName.toLowerCase(), {
-      data: indexData,
-      timestamp: Date.now()
-    });
-  }
-
-  getTableIndex(tableName) {
-    return this.indexCache.get(tableName.toLowerCase())?.data;
-  }
-
-  hasTableIndex(tableName) {
-    return this.indexCache.has(tableName.toLowerCase());
-  }
-
-  // Relation cache methods
-  setTableRelation(tableName, relationData) {
-    this.relationCache.set(tableName.toLowerCase(), {
-      data: relationData,
-      timestamp: Date.now()
-    });
-  }
-
-  getTableRelation(tableName) {
-    return this.relationCache.get(tableName.toLowerCase())?.data;
-  }
-
-  hasTableRelation(tableName) {
-    return this.relationCache.has(tableName.toLowerCase());
-  }
-
-  // Clear methods
+  // Clear cache for a specific database
   clearDatabase(databaseName) {
-    this.tablesCache.delete(databaseName);
+    this.cache.delete(databaseName);
   }
 
-  clearTableData(tableName) {
-    const normalizedName = tableName.toLowerCase();
-    this.indexCache.delete(normalizedName);
-    this.relationCache.delete(normalizedName);
-  }
-
+  // Clear entire cache
   clearAll() {
-    this.tablesCache.clear();
-    this.indexCache.clear();
-    this.relationCache.clear();
+    this.cache.clear();
   }
 }
 
