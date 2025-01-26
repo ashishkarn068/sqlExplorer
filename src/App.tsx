@@ -310,7 +310,7 @@ function App() {
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh' }}>
+    <Box sx={{ display: 'flex', height: '100vh', overflowY: 'clip' }}>
       <CssBaseline />
       
       {/* Loading Overlay */}
