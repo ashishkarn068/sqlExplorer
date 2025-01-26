@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Box, IconButton, CssBaseline, Typography, FormControl, Select, MenuItem, CircularProgress, Tabs, Tab } from '@mui/material';
-import { Menu, Database as DatabaseIcon } from 'lucide-react';
+import { Menu, Database as DatabaseIcon, X as CloseIcon } from 'lucide-react';
 import LeftPanel from './components/LeftPanel';
 import QueryBuilder from './components/QueryBuilder';
 import ResultsGrid from './components/ResultsGrid';
@@ -484,10 +484,81 @@ function App() {
 
         {/* Results Section */}
         <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <Tabs value={activeTab} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tab label={activeTableName || "Query Results"} />
+          <Tabs 
+            value={activeTab} 
+            onChange={handleTabChange} 
+            sx={{ 
+              borderBottom: 1, 
+              borderColor: '#e2e8f0',
+              minHeight: 36,
+              bgcolor: '#f8fafc',
+              '& .MuiTabs-indicator': {
+                backgroundColor: '#3b82f6',
+                height: '4px'
+              }
+            }}
+          >
+            <Tab 
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <span>{activeTableName || "Query Results"}</span>
+                </Box>
+              }
+              sx={{ 
+                fontSize: 12,
+                minHeight: 36,
+                textTransform: 'none',
+                px: 3,
+                py: 0,
+                color: '#64748b',
+                '&.Mui-selected': {
+                  color: '#3b82f6',
+                  fontWeight: 500
+                },
+                '&:hover': {
+                  color: '#3b82f6',
+                  opacity: 1
+                }
+              }} 
+            />
             {relatedResults.length > 0 && (
-              <Tab label={relatedTableName || "Related Results"} />
+              <Tab 
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <span>{relatedTableName || "Related Results"}</span>
+                    <IconButton 
+                      size="small" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearRelatedResults();
+                        setActiveTab(0);
+                      }}
+                      sx={{ 
+                        p: 0.2,
+                        '&:hover': { backgroundColor: 'rgba(0,0,0,0.04)' }
+                      }}
+                    >
+                      <CloseIcon size={10} />
+                    </IconButton>
+                  </Box>
+                }
+                sx={{ 
+                  fontSize: 12,
+                  minHeight: 36,
+                  textTransform: 'none',
+                  px: 3,
+                  py: 0,
+                  color: '#64748b',
+                  '&.Mui-selected': {
+                    color: '#3b82f6',
+                    fontWeight: 500
+                  },
+                  '&:hover': {
+                    color: '#3b82f6',
+                    opacity: 1
+                  }
+                }} 
+              />
             )}
           </Tabs>
 
