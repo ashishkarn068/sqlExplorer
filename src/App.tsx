@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, IconButton, CssBaseline, Typography, FormControl, Select, MenuItem, CircularProgress } from '@mui/material';
+import { Box, IconButton, CssBaseline, Typography, FormControl, Select, MenuItem, CircularProgress, Tabs, Tab } from '@mui/material';
 import { Menu, Database as DatabaseIcon } from 'lucide-react';
 import LeftPanel from './components/LeftPanel';
 import QueryBuilder from './components/QueryBuilder';
@@ -23,6 +23,8 @@ function App() {
   const [relatedColumns, setRelatedColumns] = useState<any[]>([]);
   const [relatedIndexedColumns, setRelatedIndexedColumns] = useState<string[]>([]);
   const [relatedTableData, setRelatedTableData] = useState<{ indexes: Array<{ indexName: string; columns: string[] }> }>({ indexes: [] });
+  const [activeTab, setActiveTab] = useState(0);
+  const [relatedTableName, setRelatedTableName] = useState('');
 
   useEffect(() => {
     const fetchDatabases = async () => {
@@ -238,18 +240,10 @@ function App() {
 
   const handleRelatedTableClick = async (targetTable: string, columnValue: any, constraints: Array<{ field: string; relatedField: string }> = []) => {
     setLoading(true);
-    setActiveTableName('');
+    setRelatedTableName(targetTable);
     
     try {
-      // Construct the WHERE clause using the relatedField from constraints
-      const whereClauses = constraints.map(({ relatedField }) => {
-        return `[${relatedField}] = '${columnValue}'`;
-      }).join(' AND ');
-
-      const query = `SELECT * FROM [${targetTable}] WHERE ${whereClauses}`;
-      console.log('Executing SQL Query:', query);
-
-      // Fetch indexed columns and table index data for the related table
+      // Fetch indexed columns and table data for the related table
       const [indexedColumnsResponse, tableIndexResponse] = await Promise.all([
         fetch(`http://localhost:3001/api/indexed-columns/${targetTable}`),
         fetch(`http://localhost:3001/api/table-index/${targetTable}`)
@@ -260,7 +254,18 @@ function App() {
         tableIndexResponse.json()
       ]);
 
-      // Execute the main query
+      // Set the indexed columns and table data for the related table
+      setRelatedIndexedColumns(indexedColumnsData);
+      setRelatedTableData(tableIndexData);
+
+      // Construct the WHERE clause using the relatedField from constraints
+      const whereClauses = constraints.map(({ relatedField }) => {
+        return `[${relatedField}] = '${columnValue}'`;
+      }).join(' AND ');
+
+      const query = `SELECT * FROM [${targetTable}] WHERE ${whereClauses}`;
+      console.log('Executing SQL Query:', query);
+
       const response = await fetch('http://localhost:3001/api/query', {
         method: 'POST',
         headers: {
@@ -296,21 +301,21 @@ function App() {
       }
 
       setRelatedResults(data);
-      setActiveTableName(targetTable.toUpperCase());
-      // Update the related table's indexed columns and table data
-      setRelatedIndexedColumns(indexedColumnsData);
-      setRelatedTableData(tableIndexData);
+      setActiveTab(1); // Switch to related results tab
     } catch (error) {
       console.error('Error executing related table query:', error);
       alert('Error executing related table query. Check console for details.');
-      setActiveTableName('');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue);
+  };
+
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflowY: 'clip' }}>
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <CssBaseline />
       
       {/* Loading Overlay */}
@@ -458,16 +463,7 @@ function App() {
       </Box>
 
       {/* Main Content */}
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        flexGrow: 1,
-        height: '100vh',
-        marginLeft: 0,
-        transition: 'margin-left 0.2s',
-        mt: '48px',
-        overflow: 'hidden'
-      }}>
+      <Box sx={{ flexGrow: 1, p: 0, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         {/* Query Builder Section */}
         <Box sx={{ 
           borderBottom: '1px solid #e2e8f0',
@@ -487,37 +483,40 @@ function App() {
         </Box>
 
         {/* Results Section */}
-        <Box sx={{ 
-          flex: 1,
-          overflow: 'auto',
-          py: 1,
-          minWidth: 0
-        }}>
-          <ResultsGrid
-            rows={results}
-            columns={columns}
-            loading={loading}
-            indexedColumns={indexedColumns}
-            tableName={activeTableName}
-            tableData={tableData}
-            onRelatedTableClick={(tableName, columnValue, constraints) => handleRelatedTableClick(tableName, columnValue, constraints)}
-          />
-        </Box>
+        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Tabs value={activeTab} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+            <Tab label={activeTableName || "Query Results"} />
+            {relatedResults.length > 0 && (
+              <Tab label={relatedTableName || "Related Results"} />
+            )}
+          </Tabs>
 
-        {/* Related Results Section */}
-        {relatedResults.length > 0 && (
-          <Box sx={{ mt: 2, minHeight: 400 }}>
+          <Box hidden={activeTab !== 0} sx={{ flexGrow: 1, overflow: 'auto', minHeight: 0 }}>
             <ResultsGrid
-              rows={relatedResults}
-              columns={relatedColumns}
+              rows={results}
+              columns={columns}
               loading={loading}
+              indexedColumns={indexedColumns}
               tableName={activeTableName}
-              indexedColumns={relatedIndexedColumns}
-              tableData={relatedTableData}
-              onRelatedTableClick={(tableName, columnValue, constraints) => handleRelatedTableClick(tableName, columnValue, constraints)}
+              tableData={tableData}
+              onRelatedTableClick={handleRelatedTableClick}
             />
           </Box>
-        )}
+
+          <Box hidden={activeTab !== 1} sx={{ flexGrow: 1, overflow: 'auto', minHeight: 0 }}>
+            {relatedResults.length > 0 && (
+              <ResultsGrid
+                rows={relatedResults}
+                columns={relatedColumns}
+                loading={loading}
+                indexedColumns={relatedIndexedColumns}
+                tableName={relatedTableName}
+                tableData={relatedTableData}
+                onRelatedTableClick={handleRelatedTableClick}
+              />
+            )}
+          </Box>
+        </Box>
       </Box>
     </Box>
   );

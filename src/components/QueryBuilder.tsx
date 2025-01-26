@@ -121,7 +121,8 @@ export default function QueryBuilder({
         borderBottom: '1px solid #e2e8f0',
         bgcolor: '#f8fafc',
         maxHeight: '70vh',
-        overflow: 'auto'
+        overflow: 'auto',
+        mt: 1
       }}
     >
       <Box sx={{ p: 1 }}>
