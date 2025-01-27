@@ -13,10 +13,15 @@ export interface Column {
   type: string;
 }
 
+export interface Filter {
+  column: string;
+  value: string;
+  condition: 'AND' | 'OR';
+}
+
 export interface QueryParams {
-  tableName?: string;
-  whereColumn?: string;
-  whereValue?: string;
+  tableName: string;
+  filters: Filter[];
   orderByColumn?: string;
   orderDirection?: 'asc' | 'desc';
   rawQuery?: string;

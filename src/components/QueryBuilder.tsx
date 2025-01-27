@@ -14,10 +14,10 @@ import {
   IconButton,
   Tooltip
 } from '@mui/material';
-import { Search, SortAsc, SortDesc, Filter, Database as DatabaseIcon, Code, ChevronDown, ChevronUp, Copy, X } from 'lucide-react';
+import { Search, SortAsc, SortDesc, Database as DatabaseIcon, Code, ChevronDown, ChevronUp, Copy, X, PlusIcon, MinusIcon } from 'lucide-react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
-import { Table, QueryParams } from '../types/database';
+import { Table, QueryParams, Filter as FilterType } from '../types/database';
 
 interface QueryBuilderProps {
   tables: Table[];
@@ -36,8 +36,7 @@ export default function QueryBuilder({
   onSqlQuerySubmit,
   isLoading
 }: QueryBuilderProps) {
-  const [whereColumn, setWhereColumn] = useState('');
-  const [whereValue, setWhereValue] = useState('');
+  const [filters, setFilters] = useState<FilterType[]>([{ column: '', value: '', condition: 'AND' }]);
   const [orderByColumn, setOrderByColumn] = useState('');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('desc');
   const [sqlCommandOpen, setSqlCommandOpen] = useState(false);
@@ -51,6 +50,32 @@ export default function QueryBuilder({
     }
   }, [selectedTable]);
 
+  const addFilter = () => {
+    setFilters([...filters, { column: '', value: '', condition: 'AND' }]);
+  };
+
+  const removeFilter = (index: number) => {
+    setFilters(filters.filter((_, i) => i !== index));
+  };
+
+  const updateFilterColumn = (index: number, value: string) => {
+    const newFilters = [...filters];
+    newFilters[index].column = value;
+    setFilters(newFilters);
+  };
+
+  const updateFilterValue = (index: number, value: string) => {
+    const newFilters = [...filters];
+    newFilters[index].value = value;
+    setFilters(newFilters);
+  };
+
+  const updateFilterCondition = (index: number, value: 'AND' | 'OR') => {
+    const newFilters = [...filters];
+    newFilters[index].condition = value;
+    setFilters(newFilters);
+  };
+
   const handleSubmit = () => {
     if (sqlCommand.trim()) {
       alert('Please use the Execute button in the SQL Command section to run SQL queries');
@@ -62,10 +87,12 @@ export default function QueryBuilder({
       return;
     }
 
+    // Filter out empty filters
+    const validFilters = filters.filter(f => f.column && f.value);
+
     onQuerySubmit({
       tableName: selectedTable.name,
-      whereColumn,
-      whereValue,
+      filters: validFilters,
       orderByColumn,
       orderDirection,
     });
@@ -244,7 +271,7 @@ export default function QueryBuilder({
                   visibility: 'hidden'
                 },
                 '&:hover .MuiAutocomplete-clearIndicator': {
-                  visibility: whereColumn ? 'visible' : 'hidden'
+                  visibility: orderByColumn ? 'visible' : 'hidden'
                 }
               }}
             />
@@ -263,148 +290,60 @@ export default function QueryBuilder({
               gap: 1
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', height: 20, justifyContent: 'space-between' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Filter size={14} className="text-gray-600" style={{ marginTop: -2 }} />
-                <Typography variant="body2" sx={{ ml: 1, fontSize: 12 }}>Filter</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', pb: 1 }}>
+              <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 500, color: '#475569' }}>Filters</Typography>
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                <Tooltip title="Add filter" arrow>
+                  <IconButton size="small" onClick={addFilter} sx={{ p: 0.5, '&:hover': { bgcolor: '#f1f5f9' } }}>
+                    <PlusIcon size={14} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Clear all filters" arrow>
+                  <IconButton size="small" onClick={() => setFilters([{ column: '', value: '', condition: 'AND' }])} sx={{ p: 0.5, visibility: filters.some(f => f.column || f.value) ? 'visible' : 'hidden', '&:hover': { bgcolor: '#f1f5f9' } }}>
+                    <X size={14} />
+                  </IconButton>
+                </Tooltip>
               </Box>
-              <Tooltip title="Clear filters" arrow>
-                <IconButton 
-                  size="small" 
-                  onClick={() => {
-                    setWhereColumn('');
-                    setWhereValue('');
-                  }}
-                  sx={{ 
-                    p: 0.5,
-                    visibility: whereColumn || whereValue ? 'visible' : 'hidden'
-                  }}
-                >
-                  <X size={14} />
-                </IconButton>
-              </Tooltip>
             </Box>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Autocomplete
-                size="small"
-                options={selectedTable?.columns.map(col => col.name) || []}
-                value={whereColumn}
-                onChange={(_, newValue) => setWhereColumn(newValue || '')}
-                renderOption={(props, option) => {
-                  const { key, style, ...otherProps } = props;
-                  return (
-                    <li 
-                      key={key}
-                      {...otherProps}
-                      style={{ 
-                        ...style,
-                        fontSize: '11px', 
-                        padding: '2px 8px' 
-                      }}
-                    >
-                      {option}
-                    </li>
-                  );
-                }}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="Column" 
-                    variant="outlined"
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxHeight: '200px', overflowY: 'auto', pr: 0.5, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-track': { background: '#f1f5f9', borderRadius: '2px' }, '&::-webkit-scrollbar-thumb': { background: '#cbd5e1', borderRadius: '2px' } }}>
+              {filters.map((filter, index) => (
+                <Box key={index} sx={{ display: 'flex', gap: 1.5, alignItems: 'center', bgcolor: '#f8fafc', p: 1, borderRadius: 1, border: '1px solid #e2e8f0', transition: 'all 0.2s', '&:hover': { borderColor: '#cbd5e1' } }}>
+                  <Autocomplete
                     size="small"
-                    InputProps={{
-                      ...params.InputProps,
-                      style: { fontSize: 11 }
-                    }}
-                    InputLabelProps={{
-                      style: { fontSize: 12 }
-                    }}
-                    sx={{
-                      '& .MuiInputBase-root': {
-                        height: '28px',
-                        '& input': {
-                          padding: '6px 8px',
-                          fontSize: 11,
-                          height: '16px'
-                        },
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#e2e8f0'
-                        },
-                        padding: '0'
-                      },
-                      '& .MuiInputLabel-root': { 
-                        fontSize: 12,
-                        transform: 'translate(14px, 6px) scale(1)'
-                      },
-                      '& .MuiInputLabel-shrink': {
-                        transform: 'translate(14px, -9px) scale(0.75)'
-                      },
-                      '& .MuiAutocomplete-endAdornment': {
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        right: 2,
-                        display: 'flex',
-                        flexDirection: 'row',
-                        '& .MuiButtonBase-root': {
-                          padding: 0
-                        },
-                        '& .MuiAutocomplete-clearIndicator': {
-                          order: 0
-                        },
-                        '& .MuiAutocomplete-popupIndicator': {
-                          order: 1
-                        }
-                      }
-                    }}
+                    options={selectedTable?.columns.map(col => col.name) || []}
+                    value={filter.column}
+                    onChange={(_, newValue) => updateFilterColumn(index, newValue || '')}
+                    renderOption={(props, option) => <li {...props} style={{ fontSize: '12px', padding: '4px 8px' }}>{option}</li>}
+                    renderInput={(params) => <TextField {...params} label="Column" variant="outlined" size="small" sx={{ width: '200px', '& .MuiInputBase-root': { height: '32px', fontSize: 12, bgcolor: 'white' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e2e8f0' }, '& .MuiInputLabel-root': { fontSize: 12 } }} />}
+                    sx={{ '& .MuiAutocomplete-input': { fontSize: 12, padding: '4px 8px !important' }, '& .MuiAutocomplete-listbox': { '& li': { fontSize: 12, padding: '4px 8px' } } }}
                   />
-                )}
-                sx={{
-                  width: '40%',
-                  '& .MuiAutocomplete-option': {
-                    fontSize: 11,
-                    py: 0,
-                    minHeight: 'unset',
-                    lineHeight: '1.2'
-                  },
-                  '& .MuiAutocomplete-listbox': {
-                    '& li': {
-                      fontSize: 11,
-                      minHeight: 'unset',
-                      padding: '2px 8px'
-                    }
-                  },
-                  '& .MuiAutocomplete-input': {
-                    fontSize: 11,
-                    padding: '6px 8px !important'
-                  },
-                  '& .MuiAutocomplete-clearIndicator': {
-                    visibility: 'hidden'
-                  },
-                  '&:hover .MuiAutocomplete-clearIndicator': {
-                    visibility: whereColumn ? 'visible' : 'hidden'
-                  }
-                }}
-              />
-              <TextField
-                size="small"
-                label="Value"
-                value={whereValue}
-                onChange={(e) => setWhereValue(e.target.value)}
-                sx={{ 
-                  flex: 1,
-                  '& .MuiInputBase-input': { 
-                    fontSize: 11,
-                    padding: '6px 8px'
-                  },
-                  '& .MuiInputLabel-root': { 
-                    fontSize: 12,
-                    transform: 'translate(14px, 6px) scale(1)'
-                  },
-                  '& .MuiInputLabel-shrink': {
-                    transform: 'translate(14px, -9px) scale(0.75)'
-                  }
-                }}
-              />
+                  <TextField
+                    size="small"
+                    label="Value"
+                    value={filter.value}
+                    onChange={(e) => updateFilterValue(index, e.target.value)}
+                    sx={{ flex: 1, '& .MuiInputBase-root': { height: '32px', fontSize: 12, bgcolor: 'white' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e2e8f0' }, '& .MuiInputLabel-root': { fontSize: 12 } }}
+                  />
+                  <FormControl size="small" sx={{ minWidth: 85 }}>
+                    <Select
+                      value={filter.condition}
+                      onChange={(e) => updateFilterCondition(index, e.target.value as 'AND' | 'OR')}
+                      sx={{ height: '32px', fontSize: 12, bgcolor: 'white', '& .MuiSelect-select': { p: '4px 8px', color: '#475569' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e2e8f0' } }}
+                    >
+                      <MenuItem value="AND" sx={{ fontSize: 12 }}>AND</MenuItem>
+                      <MenuItem value="OR" sx={{ fontSize: 12 }}>OR</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {filters.length > 1 && (
+                    <Tooltip title="Remove filter" arrow>
+                      <IconButton size="small" onClick={() => removeFilter(index)} sx={{ p: 0.5, '&:hover': { bgcolor: '#fee2e2', color: '#ef4444' } }}>
+                        <MinusIcon size={14} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
+              ))}
             </Box>
           </Paper>
 
