@@ -251,7 +251,7 @@ export default function ResultsGrid({
       <Paper 
         elevation={0} 
         sx={{ 
-          height: 400, 
+          height: '80%', 
           width: '100%',
           bgcolor: '#f8fafc',
           border: '1px solid #e2e8f0',

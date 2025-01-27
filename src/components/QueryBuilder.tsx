@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Paper,
   Box,
@@ -39,9 +39,17 @@ export default function QueryBuilder({
   const [whereColumn, setWhereColumn] = useState('');
   const [whereValue, setWhereValue] = useState('');
   const [orderByColumn, setOrderByColumn] = useState('');
-  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
+  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('desc');
   const [sqlCommandOpen, setSqlCommandOpen] = useState(false);
   const [sqlCommand, setSqlCommand] = useState('');
+
+  useEffect(() => {
+    if (selectedTable && selectedTable.columns.some(col => col.name.toLowerCase() === 'recid')) {
+      setOrderByColumn('RECID');
+    } else {
+      setOrderByColumn('');
+    }
+  }, [selectedTable]);
 
   const handleSubmit = () => {
     if (sqlCommand.trim()) {
@@ -113,7 +121,8 @@ export default function QueryBuilder({
         borderBottom: '1px solid #e2e8f0',
         bgcolor: '#f8fafc',
         maxHeight: '70vh',
-        overflow: 'auto'
+        overflow: 'auto',
+        mt: 1
       }}
     >
       <Box sx={{ p: 1 }}>
