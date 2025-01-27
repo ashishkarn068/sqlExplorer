@@ -77,11 +77,6 @@ export default function QueryBuilder({
   };
 
   const handleSubmit = () => {
-    if (sqlCommand.trim()) {
-      alert('Please use the Execute button in the SQL Command section to run SQL queries');
-      return;
-    }
-
     if (!selectedTable) {
       alert('Please select a table first');
       return;
@@ -89,6 +84,20 @@ export default function QueryBuilder({
 
     // Filter out empty filters
     const validFilters = filters.filter(f => f.column && f.value);
+
+    // Construct SQL query
+    let query = `SELECT * FROM [${selectedTable.name}]`;
+    if (validFilters.length > 0) {
+      const whereClauses = validFilters.map(f => `[${f.column}] = '${f.value}'`);
+      query += ` WHERE ${whereClauses.join(` ${validFilters[0].condition} `)}`;
+    }
+    if (orderByColumn) {
+      query += ` ORDER BY [${orderByColumn}] ${orderDirection}`;
+    }
+
+    // Set the SQL command and expand the box
+    setSqlCommand(query);
+    setSqlCommandOpen(true);
 
     onQuerySubmit({
       tableName: selectedTable.name,
