@@ -1,18 +1,8 @@
 import { DataGrid, GridColDef, GridColumnHeaderParams, GridRenderCellParams } from '@mui/x-data-grid';
 import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip, Link, IconButton } from '@mui/material';
-import { Table as TableIcon, Copy as CopyIcon, Database as DatabaseIcon } from 'lucide-react';
+import { Table as TableIcon, Copy as CopyIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
-
-interface Relation {
-  name: string;
-  relatedTable: string;
-  cardinality: string;
-  relationshipType: string;
-  constraints: Array<{
-    field: string;
-    relatedField: string;
-  }>;
-}
+import { Relation, RelationData } from '../types/database';
 
 interface ResultsGridProps {
   rows: any[];
@@ -26,7 +16,13 @@ interface ResultsGridProps {
       columns: string[];
     }>;
   };
-  onRelatedTableClick?: (tableName: string, columnValue: any, constraints: Array<{ field: string; relatedField: string }>, clickedField: string) => void;
+  onRelatedTableClick?: (
+    tableName: string,
+    columnValue: any,
+    constraints: Array<{ field: string; relatedField: string }>,
+    clickedField: string,
+    relations: Relation[]
+  ) => void;
 }
 
 export default function ResultsGrid({ 
@@ -42,8 +38,8 @@ export default function ResultsGrid({
 
   const [highlightEnabled, setHighlightEnabled] = useState(true);
   const [hideEmptyEnabled, setHideEmptyEnabled] = useState(false);
-  const [relationData, setRelationData] = useState<any>(null);
-
+  const [relationData, setRelationData] = useState<RelationData | null>(null);
+  const [adjustedColumns, setAdjustedColumns] = useState<GridColDef[]>([]);
 
   const toggleHighlight = () => {
     setHighlightEnabled(!highlightEnabled);
@@ -85,175 +81,279 @@ export default function ResultsGrid({
           const response = await fetch(`http://localhost:3001/api/table-relation/${tableName}`);
           const data = await response.json();
           
-          // Log the raw data first
-          console.log('Raw relation data for table', tableName, ':', data);
-          
-          // Check if data has the expected structure
-          if (data && typeof data === 'object' && 'relations' in data) {
-            const relations = data.relations;
-            if (Array.isArray(relations) && relations.length > 0) {
-              console.log('Found relations:', relations);
-              setRelationData(data);
-            } else {
-              console.log('No relations array found in data');
-              setRelationData({ relations: [] });
-            }
+          if (data && Array.isArray(data.relations)) {
+            setRelationData(data);
           } else {
             console.log('Invalid relation data structure:', data);
-            setRelationData({ relations: [] });
+            setRelationData({ tableName, relations: [] });
           }
         } catch (error) {
           console.error('Error fetching relation data:', error);
-          setRelationData({ relations: [] });
+          setRelationData({ tableName, relations: [] });
         }
       }
     };
     fetchRelationData();
   }, [tableName]);
 
-  const handleCopyToClipboard = (value: any) => {
-    navigator.clipboard.writeText(String(value));
-  };
+  useEffect(() => {
+    const adjustedColumns: GridColDef[] = columns.map((col) => {
+      // Find the maximum length of values in this column
+      const maxValueLength = safeRows.reduce((max, row) => {
+        const value = row[col.field]?.toString() || '';
+        return Math.max(max, value.length);
+      }, 0);
 
-  const adjustedColumns = columns.map(col => {
-    const isIndexed = Array.isArray(indexedColumns) && 
-      indexedColumns.map(c => c.toLowerCase()).includes(col.field.toLowerCase());
-    const indexInfo = tableData?.indexes.find(index => 
-      index.columns.map(c => c.toLowerCase()).includes(col.field.toLowerCase())
-    );
-    
-    const relation = relationData?.relations?.find((r: Relation) => {
-      if (!r || !r.constraints) return false;
-      return r.constraints.some(constraint => 
-        constraint.field.toLowerCase() === col.field.toLowerCase()
+      // Compare with column header length
+      const headerLength = col.headerName?.length || col.field.length;
+      const maxLength = Math.max(maxValueLength, headerLength);
+
+      // Calculate width: each character is roughly 8px + padding
+      const width = Math.min(Math.max(maxLength * 8 + 50, 100), 300);
+
+      const isIndexed = Array.isArray(indexedColumns) && 
+        indexedColumns.map(c => c.toLowerCase()).includes(col.field.toLowerCase());
+      const indexInfo = tableData?.indexes.find(index => 
+        index.columns.map(c => c.toLowerCase()).includes(col.field.toLowerCase())
       );
-    });
+      
+      const relation = relationData?.relations?.find((r: Relation) => {
+        if (!r || !r.constraints) return false;
+        return r.constraints.some(constraint => 
+          constraint.field.toLowerCase() === col.field.toLowerCase()
+        );
+      });
 
-    const columnClassName = highlightEnabled && isIndexed ? 'indexed-column' : '';
-    
-    const renderCellWithCopy = (params: GridRenderCellParams) => {
-      // Format the value to ensure it's renderable
-      const formatValue = (val: any): string => {
-        if (val === null || val === undefined) return '';
-        if (typeof val === 'object') {
-          try {
-            return JSON.stringify(val);
-          } catch {
+      const columnClassName = `${highlightEnabled && isIndexed ? 'indexed-column' : ''} ${relation ? 'related-column' : ''}`;
+      
+      const renderCellWithCopy = (params: GridRenderCellParams) => {
+        const formatValue = (value: any) => {
+          if (value === null || value === undefined) {
             return '';
           }
-        }
-        return String(val);
-      };
+          if (typeof value === 'boolean') {
+            return value.toString();
+          }
+          if (typeof value === 'object') {
+            return JSON.stringify(value);
+          }
+          return value;
+        };
 
-      const value = formatValue(params.value);
-      
-      if (relation) {
+        const value = formatValue(params.value);
+        const hasValue = value !== null && value !== undefined && value !== '';
+        
+        if (relation) {
+          return (
+            <Box sx={{ 
+              width: '100%', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: 0.5
+            }}>
+              <Link
+                component="button"
+                onClick={() => {
+                  if (relation && onRelatedTableClick && relationData) {
+                    onRelatedTableClick(
+                      relation.relatedTable,
+                      params.value,
+                      relation.constraints,
+                      params.field,
+                      relationData.relations
+                    );
+                  }
+                }}
+                sx={{
+                  textDecoration: 'underline',
+                  color: '#1976d2 !important',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  border: 'none',
+                  background: 'none',
+                  padding: 0,
+                  fontFamily: 'inherit',
+                  '&:hover': {
+                    color: '#1565c0 !important',
+                    textDecoration: 'underline'
+                  }
+                }}
+              >
+                {value}
+              </Link>
+              {hasValue && (
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(value?.toString() || '');
+                  }}
+                  sx={{
+                    p: 0.2,
+                    opacity: 0,
+                    minWidth: '20px',
+                    '&:hover': { opacity: 1 },
+                    '.MuiDataGrid-row:hover &': { opacity: 0.7 }
+                  }}
+                >
+                  <CopyIcon size={12} />
+                </IconButton>
+              )}
+            </Box>
+          );
+        }
+
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-            <Link
-              component="button"
-              onClick={() => {
-                if (relation && onRelatedTableClick) {
-                  console.log('Clicking related table with:', {
-                    relatedTable: relation.relatedTable,
-                    value: params.value,
-                    constraints: relation.constraints,
-                    clickedField: params.field
-                  });
-                  onRelatedTableClick(
-                    relation.relatedTable,
-                    params.value,
-                    relation.constraints,
-                    params.field
-                  );
-                }
-              }}
-              sx={{
-                textDecoration: 'underline',
-                color: '#1976d2 !important',
-                cursor: 'pointer',
-                fontSize: '11px',
-                border: 'none',
-                background: 'none',
-                padding: 0,
-                fontFamily: 'inherit',
-                '&:hover': {
-                  color: '#1565c0 !important',
-                  textDecoration: 'underline'
-                }
-              }}
-            >
+          <Box sx={{ 
+            width: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            gap: 0.5
+          }}>
+            <span style={{ fontSize: '11px' }}>
               {value}
-            </Link>
-            <Tooltip title="Copy to clipboard" arrow>
+            </span>
+            {hasValue && (
               <IconButton
                 size="small"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleCopyToClipboard(value);
+                  navigator.clipboard.writeText(value?.toString() || '');
                 }}
                 sx={{
-                  ml: 0.5,
                   p: 0.2,
                   opacity: 0,
+                  minWidth: '20px',
                   '&:hover': { opacity: 1 },
                   '.MuiDataGrid-row:hover &': { opacity: 0.7 }
                 }}
               >
                 <CopyIcon size={12} />
               </IconButton>
-            </Tooltip>
+            )}
           </Box>
         );
-      }
+      };
+      
+      const renderHeaderWithCopy = (params: GridColumnHeaderParams) => {
+        let tooltipContent = '';
+        if (isIndexed) {
+          tooltipContent = `
+            <div style="padding: 8px;">
+              <div style="font-weight: 600; margin-bottom: 4px; color: #1976d2;">Index Information</div>
+              <div>${indexInfo?.indexName || 'Unknown'}</div>
+            </div>
+          `;
+        }
+        if (relationData?.relations) {
+          // Find all relations where this field is used in constraints
+          const relevantRelations = relationData.relations.filter(rel => 
+            rel.constraints.some(c => c.field.toLowerCase() === col.field.toLowerCase())
+          );
 
-      return (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-          <Typography variant="body2" sx={{ fontSize: '11px' }}>
-            {value}
-          </Typography>
-          <Tooltip title="Copy to clipboard" arrow>
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCopyToClipboard(value);
-              }}
-              sx={{
-                ml: 0.5,
-                p: 0.2,
-                opacity: 0,
-                '&:hover': { opacity: 1 },
-                '.MuiDataGrid-row:hover &': { opacity: 0.7 }
-              }}
-            >
-              <CopyIcon size={12} />
-            </IconButton>
+          if (relevantRelations.length > 0) {
+            tooltipContent = `
+              <div style="padding: 8px;">
+                <div style="font-weight: 600; margin-bottom: 8px; color: #1976d2;">Related Tables</div>
+                <div style="
+                  max-height: 300px; 
+                  overflow-y: auto;
+                  overflow-x: hidden;
+                  padding-right: 8px;
+                  margin-right: -8px;
+                ">
+                  ${relevantRelations.map(relation => `
+                    <div style="margin-bottom: 12px;">
+                      <div style="margin-bottom: 4px;"><b>${relation.relatedTable}</b></div>
+                      <div style="font-size: 11px; color: #666; margin-bottom: 8px;">
+                        ${relation.relationshipType} (${relation.cardinality})
+                      </div>
+                      <div style="font-weight: 600; margin-bottom: 4px; color: #1976d2;">Constraints</div>
+                      <div style="font-family: monospace; font-size: 11px;">
+                        ${relation.constraints.map(c => 
+                          `<div style="margin-bottom: 2px;">
+                            <span style="color: #666;">•</span> ${c.field} 
+                            <span style="color: #666;">→</span> 
+                            <span style="color: #1976d2;">${relation.relatedTable}</span>
+                            <span style="color: #666;">.</span>${c.relatedField}
+                          </div>`
+                        ).join('')}
+                      </div>
+                    </div>
+                  `).join('<div style="border-top: 1px solid #e0e0e0; margin: 8px 0;"></div>')}
+                </div>
+              </div>
+            `;
+          }
+        }
+        
+        return (
+          <Tooltip 
+            title={<div dangerouslySetInnerHTML={{ __html: tooltipContent }} />}
+            arrow
+            componentsProps={{
+              tooltip: {
+                sx: {
+                  bgcolor: '#fff',
+                  color: '#333',
+                  border: '1px solid #e0e0e0',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  borderRadius: '6px',
+                  maxWidth: '400px',
+                  p: 0,
+                  '& .MuiTooltip-arrow': {
+                    color: '#fff',
+                    '&:before': {
+                      border: '1px solid #e0e0e0'
+                    }
+                  },
+                  '& ::-webkit-scrollbar': {
+                    width: '6px',
+                    height: '6px'
+                  },
+                  '& ::-webkit-scrollbar-track': {
+                    background: 'transparent'
+                  },
+                  '& ::-webkit-scrollbar-thumb': {
+                    background: 'rgba(0, 0, 0, 0.08)',
+                    borderRadius: '3px',
+                    '&:hover': {
+                      background: 'rgba(0, 0, 0, 0.12)'
+                    }
+                  }
+                }
+              }
+            }}
+          >
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              gap: '4px'
+            }}>
+              <div>{params.colDef.headerName}</div>
+            </Box>
           </Tooltip>
-        </Box>
-      );
-    };
-    
-    return {
-      ...col,
-      flex: undefined,
-      width: Math.max((col.headerName?.length || col.field.length) * 8 + 32, 80),
-      headerAlign: 'center' as const,
-      align: 'center' as const,
-      headerClassName: columnClassName,
-      cellClassName: columnClassName,
-      renderHeader: (params: GridColumnHeaderParams) => (
-        <Tooltip 
-          title={isIndexed ? `Part of Index: ${indexInfo?.indexName || 'Unknown'}` : 
-                 relation ? `Related to: ${relation.relatedTable}` : ''}
-          arrow
-        >
-          <div>{params.colDef.headerName}</div>
-        </Tooltip>
-      ),
-      renderCell: renderCellWithCopy
-    };
-  });
+        );
+      };
+
+      return {
+        ...col,
+        width,
+        minWidth: width,
+        renderCell: renderCellWithCopy,
+        renderHeader: renderHeaderWithCopy,
+        headerAlign: 'center' as const,
+        align: 'center' as const,
+        headerClassName: columnClassName,
+        cellClassName: columnClassName,
+      };
+    });
+
+    setAdjustedColumns(adjustedColumns);
+  }, [columns, safeRows, indexedColumns, relationData]);
 
   // Log indexed columns when data is loaded
   useEffect(() => {
@@ -342,7 +442,7 @@ export default function ResultsGrid({
                   }}
                 >
                   <Box sx={{ mb: 2 }}>
-                    <DatabaseIcon size={48} strokeWidth={1} />
+                    <TableIcon size={48} strokeWidth={1} />
                   </Box>
                   <Typography variant="h6" sx={{ mb: 1, color: 'text.primary' }}>
                     No Records Found
@@ -397,9 +497,8 @@ export default function ResultsGrid({
                 borderBottom: '1px solid #f1f5f9',
                 fontSize: '11px',
                 padding: '4px 8px',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
+                whiteSpace: 'normal',
+                overflow: 'visible'
               },
               '& .MuiDataGrid-row': {
                 maxHeight: '32px !important',

@@ -27,3 +27,19 @@ export interface QueryParams {
   limit: number;
   rawQuery?: string;
 }
+
+export interface Relation {
+  name: string;
+  relatedTable: string;
+  cardinality: string;
+  relationshipType: string;
+  constraints: Array<{
+    field: string;
+    relatedField: string;
+  }>;
+}
+
+export interface RelationData {
+  tableName: string;
+  relations: Relation[];
+}

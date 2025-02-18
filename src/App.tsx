@@ -21,11 +21,12 @@ import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
 import LeftPanel from './components/LeftPanel';
 import ResultsGrid from './components/ResultsGrid';
-import { Database, Table, QueryParams } from './types/database';
+import { Database, Table, QueryParams, Relation } from './types/database';
 
 interface RelatedTab {
   id: string;
   tableName: string;
+  relationName: string;
   results: any[];
   columns: any[];
   indexedColumns: string[];
@@ -306,83 +307,99 @@ function App() {
     setActiveTab(newValue);
   };
 
-  const handleRelatedTableClick = async (targetTable: string, columnValue: any, constraints: Array<{ field: string, relatedField: string }>, clickedField: string) => {
+  const handleRelatedTableClick = async (targetTable: string, columnValue: any, constraints: Array<{ field: string, relatedField: string }>, clickedField: string, relations: Relation[]) => {
     setLoading(true);
     try {
-      const matchingConstraint = constraints.find(c => c.field.toLowerCase() === clickedField.toLowerCase());
-      
-      if (!matchingConstraint) {
-        console.error('No matching constraint found for clicked field:', clickedField);
-        return;
-      }
+      // Find all relations where the clicked field is used as a constraint
+      const relevantRelations = relations.filter(relation => 
+        relation.constraints.some(constraint => 
+          constraint.field.toLowerCase() === clickedField.toLowerCase()
+        )
+      );
 
-      const whereClause = `[${matchingConstraint.relatedField}] = ${typeof columnValue === 'string' ? `'${columnValue}'` : columnValue}`;
-      const query = `SELECT * FROM [${targetTable}] WHERE ${whereClause}`;
-      
-      console.log('Executing related query:', query);
-      
-      const [queryResponse, indexedColumnsResponse, tableIndexResponse] = await Promise.all([
-        fetch('http://localhost:3001/api/query', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            query,
-            database: selectedDatabase,
-            rawQuery: query
+      console.log('Found relevant relations:', relevantRelations);
+
+      // Create a tab for each related table
+      for (const relation of relevantRelations) {
+        const matchingConstraint = relation.constraints.find(c => 
+          c.field.toLowerCase() === clickedField.toLowerCase()
+        );
+
+        if (!matchingConstraint) continue;
+
+        const query = `SELECT * FROM [${relation.relatedTable}] WHERE [${matchingConstraint.relatedField}] = ${
+          typeof columnValue === 'string' ? `'${columnValue}'` : columnValue
+        }`;
+
+        console.log(`Executing query for ${relation.relatedTable}:`, query);
+
+        const [queryResponse, indexedColumnsResponse, tableIndexResponse] = await Promise.all([
+          fetch('http://localhost:3001/api/query', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              query,
+              database: selectedDatabase,
+              rawQuery: query
+            }),
           }),
-        }),
-        fetch(`http://localhost:3001/api/indexed-columns/${targetTable}`),
-        fetch(`http://localhost:3001/api/table-index/${targetTable}`)
-      ]);
+          fetch(`http://localhost:3001/api/indexed-columns/${relation.relatedTable}`),
+          fetch(`http://localhost:3001/api/table-index/${relation.relatedTable}`)
+        ]);
 
-      if (!queryResponse.ok) {
-        throw new Error(`HTTP error! status: ${queryResponse.status}`);
+        if (!queryResponse.ok) {
+          throw new Error(`HTTP error! status: ${queryResponse.status}`);
+        }
+
+        const [data, indexedColumnsData, tableIndexData] = await Promise.all([
+          queryResponse.json(),
+          indexedColumnsResponse.json(),
+          tableIndexResponse.json()
+        ]);
+
+        if (data.error) {
+          console.error(`Query error for ${relation.relatedTable}:`, data.error);
+          setSqlCommand(prev => `${prev}\n-- Error for ${relation.relatedTable}: ${data.error}`);
+          continue;
+        }
+
+        let gridColumns: any[] = [];
+        if (data && data.length > 0) {
+          gridColumns = Object.keys(data[0])
+            .filter(key => key !== 'id')
+            .map(key => ({
+              field: key,
+              headerName: key,
+              flex: 1,
+            }));
+        }
+
+        const newTabId = `${relation.relatedTable}-${Date.now()}`;
+        const newTab: RelatedTab = {
+          id: newTabId,
+          tableName: relation.relatedTable,
+          relationName: `${relation.name} (${matchingConstraint.field})`,
+          results: data || [],
+          columns: gridColumns,
+          indexedColumns: indexedColumnsData,
+          tableData: tableIndexData
+        };
+
+        setRelatedTabs(prev => [...prev, newTab]);
+        // Only set active tab to the first relation
+        if (relation === relevantRelations[0]) {
+          setActiveTab(newTabId);
+        }
+
+        const timestamp = new Date().toLocaleTimeString();
+        setSqlCommand(prev => `${prev}\n-- [${timestamp}] Related Query for ${relation.relatedTable}:\n${query}`);
       }
 
-      const [data, indexedColumnsData, tableIndexData] = await Promise.all([
-        queryResponse.json(),
-        indexedColumnsResponse.json(),
-        tableIndexResponse.json()
-      ]);
-
-      if (data.error) {
-        console.error('Query error:', data.error);
-        setSqlCommand(prev => `${prev}\n-- Error: ${data.error}`);
-        return;
-      }
-
-      let gridColumns: any[] = [];
-      if (data && data.length > 0) {
-        gridColumns = Object.keys(data[0])
-          .filter(key => key !== 'id')
-          .map(key => ({
-            field: key,
-            headerName: key,
-            flex: 1,
-          }));
-      }
-
-      const newTabId = `${targetTable}-${Date.now()}`;
-      const newTab: RelatedTab = {
-        id: newTabId,
-        tableName: targetTable,
-        results: data || [],
-        columns: gridColumns,
-        indexedColumns: indexedColumnsData,
-        tableData: tableIndexData
-      };
-
-      setRelatedTabs(prev => [...prev, newTab]);
-      setActiveTab(newTabId);
-
-      const timestamp = new Date().toLocaleTimeString();
-      setSqlCommand(prev => `${prev}\n-- [${timestamp}] Related Query:\n${query}`);
-
-    } catch (error) {
-      console.error('API error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    } catch (err) {
+      console.error('API error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
       setSqlCommand(prev => `${prev}\n-- Error: ${errorMessage}`);
     } finally {
       setLoading(false);
@@ -560,34 +577,74 @@ function App() {
                 />
                 
                 <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', mt: 1 }}>
-                  <Tooltip title="Copy SQL" arrow>
+                  <Tooltip 
+                    title={<div style={{ padding: '8px' }}>Copy SQL</div>}
+                    enterDelay={500}
+                    arrow
+                    componentsProps={{
+                      tooltip: {
+                        sx: {
+                          bgcolor: '#fff',
+                          color: '#333',
+                          border: '1px solid #e0e0e0',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                          borderRadius: '6px',
+                          maxWidth: '400px',
+                          p: 0,
+                          '& .MuiTooltip-arrow': {
+                            color: '#fff',
+                            '&:before': {
+                              border: '1px solid #e0e0e0'
+                            }
+                          }
+                        }
+                      }
+                    }}
+                  >
                     <IconButton
                       size="small"
                       onClick={handleCopySQL}
                       sx={{ 
                         p: 0.5,
                         color: '#94a3b8',
-                        '&:hover': {
-                          color: '#e2e8f0',
-                          bgcolor: 'rgba(148, 163, 184, 0.1)'
-                        }
+                        '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
                       }}
                     >
                       <Copy size={14} />
                     </IconButton>
                   </Tooltip>
                   
-                  <Tooltip title="Clear SQL" arrow>
+                  <Tooltip 
+                    title={<div style={{ padding: '8px' }}>Clear SQL</div>}
+                    enterDelay={500}
+                    arrow
+                    componentsProps={{
+                      tooltip: {
+                        sx: {
+                          bgcolor: '#fff',
+                          color: '#333',
+                          border: '1px solid #e0e0e0',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                          borderRadius: '6px',
+                          maxWidth: '400px',
+                          p: 0,
+                          '& .MuiTooltip-arrow': {
+                            color: '#fff',
+                            '&:before': {
+                              border: '1px solid #e0e0e0'
+                            }
+                          }
+                        }
+                      }
+                    }}
+                  >
                     <IconButton
                       size="small"
                       onClick={handleClearSQL}
                       sx={{ 
                         p: 0.5,
                         color: '#94a3b8',
-                        '&:hover': {
-                          color: '#e2e8f0',
-                          bgcolor: 'rgba(148, 163, 184, 0.1)'
-                        }
+                        '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
                       }}
                     >
                       <X size={13} />
@@ -635,54 +692,115 @@ function App() {
               <Tabs 
                 value={activeTab} 
                 onChange={handleTabChange}
+                variant="scrollable"
+                scrollButtons="auto"
                 sx={{
                   minHeight: 36,
                   '& .MuiTab-root': {
                     minHeight: 36,
                     textTransform: 'none',
                     fontSize: 13,
-                    fontWeight: 'normal'
+                    fontWeight: 'normal',
+                    padding: '6px 12px',
+                    minWidth: 'auto'
+                  },
+                  '& .MuiTab-root.Mui-selected': {
+                    color: '#1976d2'
                   }
                 }}
               >
-                <Tab 
+                <Tab
                   value="main"
-                  label={activeTableName || 'Results'} 
-                  sx={{
-                    fontSize: 13,
-                    fontWeight: 'normal'
-                  }}
+                  label={
+                    <Typography 
+                      sx={{ 
+                        fontSize: 13,
+                        fontWeight: 600
+                      }}
+                    >
+                      {activeTableName || 'Results'}
+                    </Typography>
+                  }
                 />
-                {relatedTabs.map(tab => (
-                  <Tab
-                    key={tab.id}
-                    value={tab.id}
-                    label={`${tab.tableName} (Related)`}
-                    sx={{
-                      fontSize: 13,
-                      fontWeight: 'normal'
-                    }}
-                    icon={
-                      <IconButton 
-                        size="small" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCloseRelatedTab(tab.id);
-                        }}
-                        sx={{ 
-                          ml: 1,
-                          p: 0.5,
-                          '&:hover': {
-                            bgcolor: 'rgba(0, 0, 0, 0.04)'
-                          }
-                        }}
-                      >
-                        <X size={14} />
-                      </IconButton>
-                    }
-                    iconPosition="end"
-                  />
-                ))}
+                {relatedTabs
+                  .sort((a, b) => (b.results?.length || 0) - (a.results?.length || 0))
+                  .map(tab => (
+                    <Tab
+                      key={tab.id}
+                      value={tab.id}
+                      sx={{
+                        bgcolor: tab.results?.length ? 'rgba(76, 175, 80, 0.08)' : 'transparent',
+                        borderRadius: 1,
+                        mr: 0.5,
+                        '&.Mui-selected': {
+                          bgcolor: tab.results?.length ? 'rgba(76, 175, 80, 0.16)' : undefined,
+                        },
+                        '&:hover': {
+                          bgcolor: tab.results?.length ? 'rgba(76, 175, 80, 0.16)' : 'rgba(0, 0, 0, 0.04)',
+                        }
+                      }}
+                      label={
+                        <Box sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 1,
+                          maxWidth: '160px'
+                        }}>
+                          <Tooltip 
+                            title={<div style={{ padding: '8px' }}>{tab.relationName}</div>}
+                            enterDelay={500}
+                            arrow
+                            componentsProps={{
+                              tooltip: {
+                                sx: {
+                                  bgcolor: '#fff',
+                                  color: '#333',
+                                  border: '1px solid #e0e0e0',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                  borderRadius: '6px',
+                                  maxWidth: '400px',
+                                  p: 0,
+                                  '& .MuiTooltip-arrow': {
+                                    color: '#fff',
+                                    '&:before': {
+                                      border: '1px solid #e0e0e0'
+                                    }
+                                  }
+                                }
+                              }
+                            }}
+                          >
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                fontSize: 13,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                color: tab.results?.length ? '#2e7d32' : 'inherit'
+                              }}
+                            >
+                              {tab.relationName}
+                            </Typography>
+                          </Tooltip>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCloseRelatedTab(tab.id);
+                            }}
+                            sx={{
+                              p: 0.25,
+                              ml: 'auto',
+                              '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
+                            }}
+                          >
+                            <X size={14} />
+                          </IconButton>
+                        </Box>
+                      }
+                    />
+                  ))}
               </Tabs>
             </Box>
 
