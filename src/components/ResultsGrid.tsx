@@ -1,6 +1,6 @@
 import { DataGrid, GridColDef, GridColumnHeaderParams, GridRenderCellParams } from '@mui/x-data-grid';
 import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip, Link, IconButton } from '@mui/material';
-import { Table as TableIcon, Copy as CopyIcon } from 'lucide-react';
+import { Table as TableIcon, Copy as CopyIcon, Database as DatabaseIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface Relation {
@@ -26,7 +26,7 @@ interface ResultsGridProps {
       columns: string[];
     }>;
   };
-  onRelatedTableClick?: (tableName: string, columnValue: any, constraints: Array<{ field: string; relatedField: string }>) => void;
+  onRelatedTableClick?: (tableName: string, columnValue: any, constraints: Array<{ field: string; relatedField: string }>, clickedField: string) => void;
 }
 
 export default function ResultsGrid({ 
@@ -39,9 +39,11 @@ export default function ResultsGrid({
   onRelatedTableClick 
 }: ResultsGridProps) {
   const safeRows = Array.isArray(rows) ? rows : [];
+
   const [highlightEnabled, setHighlightEnabled] = useState(true);
   const [hideEmptyEnabled, setHideEmptyEnabled] = useState(false);
   const [relationData, setRelationData] = useState<any>(null);
+
 
   const toggleHighlight = () => {
     setHighlightEnabled(!highlightEnabled);
@@ -150,7 +152,22 @@ export default function ResultsGrid({
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
             <Link
               component="button"
-              onClick={() => onRelatedTableClick?.(relation.relatedTable, params.value, relation.constraints)}
+              onClick={() => {
+                if (relation && onRelatedTableClick) {
+                  console.log('Clicking related table with:', {
+                    relatedTable: relation.relatedTable,
+                    value: params.value,
+                    constraints: relation.constraints,
+                    clickedField: params.field
+                  });
+                  onRelatedTableClick(
+                    relation.relatedTable,
+                    params.value,
+                    relation.constraints,
+                    params.field
+                  );
+                }
+              }}
               sx={{
                 textDecoration: 'underline',
                 color: '#1976d2 !important',
@@ -251,7 +268,6 @@ export default function ResultsGrid({
       <Paper 
         elevation={0} 
         sx={{ 
-          height: '80%', 
           width: '100%',
           bgcolor: '#f8fafc',
           border: '1px solid #e2e8f0',
@@ -293,7 +309,6 @@ export default function ResultsGrid({
         <Paper 
           elevation={0} 
           sx={{ 
-            height: '100%',
             bgcolor: 'white',
             border: '1px solid #e2e8f0'
           }}
@@ -310,8 +325,39 @@ export default function ResultsGrid({
             getRowId={(row) => row.id || Math.random()}
             autoHeight={false}
             density="compact"
+            initialState={{
+              pagination: { paginationModel: { pageSize: 25 } },
+            }}
+            components={{
+              NoRowsOverlay: () => (
+                <Box 
+                  sx={{ 
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    p: 3,
+                    color: 'text.secondary'
+                  }}
+                >
+                  <Box sx={{ mb: 2 }}>
+                    <DatabaseIcon size={48} strokeWidth={1} />
+                  </Box>
+                  <Typography variant="h6" sx={{ mb: 1, color: 'text.primary' }}>
+                    No Records Found
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" align="center">
+                    {tableName ? 
+                      `No records found in table "${tableName}". Try modifying your query or filters.` :
+                      'Select a table or write a query to see results here.'}
+                  </Typography>
+                </Box>
+              )
+            }}
             sx={{
               border: 'none',
+              height: 'calc(100vh - 265px)',
               '& .MuiDataGrid-main': {
                 overflow: 'auto !important',
                 scrollbarWidth: 'thin',

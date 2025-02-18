@@ -1,13 +1,39 @@
 import { useState, useEffect } from 'react';
-import { Box, IconButton, CssBaseline, Typography, FormControl, Select, MenuItem, CircularProgress, Tabs, Tab } from '@mui/material';
-import { Menu, Database as DatabaseIcon, X as CloseIcon } from 'lucide-react';
+import { 
+  Box, 
+  Typography, 
+  IconButton, 
+  Tabs, 
+  Tab,
+  Button,
+  Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  CssBaseline, 
+  FormControl, 
+  Select, 
+  MenuItem, 
+  CircularProgress
+} from '@mui/material';
+import { Menu, Database as DatabaseIcon, X as CloseIcon, Code, ChevronDown, Copy, X } from 'lucide-react';
+import CodeMirror from '@uiw/react-codemirror';
+import { sql } from '@codemirror/lang-sql';
 import LeftPanel from './components/LeftPanel';
-import QueryBuilder from './components/QueryBuilder';
 import ResultsGrid from './components/ResultsGrid';
 import { Database, Table, QueryParams } from './types/database';
 
+interface RelatedTab {
+  id: string;
+  tableName: string;
+  results: any[];
+  columns: any[];
+  indexedColumns: string[];
+  tableData: any;
+}
+
 function App() {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(true);
   const [selectedDatabase, setSelectedDatabase] = useState('');
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [loading, setLoading] = useState(false);
@@ -19,12 +45,10 @@ function App() {
   const [indexedColumns, setIndexedColumns] = useState<string[]>([]);
   const [tableData, setTableData] = useState<{ indexes: Array<{ indexName: string; columns: string[] }> }>({ indexes: [] });
   const [activeTableName, setActiveTableName] = useState<string>('');
-  const [relatedResults, setRelatedResults] = useState<any[]>([]);
-  const [relatedColumns, setRelatedColumns] = useState<any[]>([]);
-  const [relatedIndexedColumns, setRelatedIndexedColumns] = useState<string[]>([]);
-  const [relatedTableData, setRelatedTableData] = useState<{ indexes: Array<{ indexName: string; columns: string[] }> }>({ indexes: [] });
-  const [activeTab, setActiveTab] = useState(0);
-  const [relatedTableName, setRelatedTableName] = useState('');
+  const [relatedTabs, setRelatedTabs] = useState<RelatedTab[]>([]);
+  const [activeTab, setActiveTab] = useState<string>('main');
+  const [sqlCommandOpen, setSqlCommandOpen] = useState(false);
+  const [sqlCommand, setSqlCommand] = useState('');
 
   useEffect(() => {
     const fetchDatabases = async () => {
@@ -66,28 +90,31 @@ function App() {
     }
   };
 
-  const clearResults = () => {
-    setResults([]);
-    setColumns([]);
-  };
-
-  const clearRelatedResults = () => {
-    setRelatedResults([]);
-    setRelatedColumns([]);
-  };
-
-  const handleQuerySubmit = async (params: QueryParams) => {
-    clearResults();
-    clearRelatedResults();
+  const handleTableSelect = async (table: Table, params: QueryParams) => {
+    setSelectedTable(table);
     setLoading(true);
-    setActiveTableName('');
-    
+    setRelatedTabs([]);
+    setActiveTab('main');
+
     try {
-      console.log('Submitting query:', params);
-      // Ensure we're only handling QueryBuilder queries
-      if (params.rawQuery) {
-        throw new Error('Raw SQL queries should be executed from SQL Command section');
+      // Construct the query
+      let query = `SELECT TOP ${params.limit} * FROM [${params.tableName}]`;
+
+      // Add WHERE clause if there are filters
+      if (params.filters && params.filters.length > 0) {
+        const validFilters = params.filters.filter(f => f.column && f.value);
+        if (validFilters.length > 0) {
+          query += ' WHERE ' + validFilters.map(f => `[${f.column}] LIKE '%${f.value}%'`).join(' AND ');
+        }
       }
+
+      // Add ORDER BY clause if specified
+      if (params.orderByColumn) {
+        query += ` ORDER BY [${params.orderByColumn}] ${params.orderDirection}`;
+      }
+
+      const currentTime = new Date().toLocaleTimeString();
+      setSqlCommand(prev => `${prev}\n-- [${currentTime}] Selected table:\n${query}`);
 
       const response = await fetch('http://localhost:3001/api/query', {
         method: 'POST',
@@ -95,24 +122,21 @@ function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          query,
           database: selectedDatabase,
-          ...params,
+          rawQuery: query
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const data = await response.json();
+      
       if (data.error) {
         console.error('Query error:', data.error);
-        alert(data.error);
+        setSqlCommand(prev => `${prev}\n-- Error: ${data.error}`);
         return;
       }
 
-      // Extract column information from the first row
-      if (data.length > 0) {
+      if (data && data.length > 0) {
         const gridColumns = Object.keys(data[0])
           .filter(key => key !== 'id')
           .map(key => ({
@@ -123,47 +147,245 @@ function App() {
         setColumns(gridColumns);
       }
 
-      setResults(data);
-      // Set table name from QueryBuilder
-      setActiveTableName(params.tableName ? params.tableName.toUpperCase() : '');
+      setResults(data || []);
+      setActiveTableName(params.tableName);
+
     } catch (error) {
-      console.error('Error executing query:', error);
-      alert('Error executing query. Check console for details.');
-      setActiveTableName('');
+      console.error('API error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      setSqlCommand(prev => `${prev}\n-- Error: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const testConnection = async () => {
-    if (!selectedDatabase) {
-      return;
-    }
-    
+  const handleQuerySubmit = async (params: QueryParams) => {
+    setLoading(true);
+    setRelatedTabs([]);
+    setActiveTab('main');
+
     try {
-      const response = await fetch(`http://localhost:3001/api/test-connection/${selectedDatabase}`);
+      // Construct the query
+      let query = `SELECT TOP ${params.limit} * FROM [${params.tableName}]`;
+
+      if (params.filters && params.filters.length > 0) {
+        const whereClause = params.filters.map((filter, index) => {
+          const condition = index === 0 ? 'WHERE' : filter.condition;
+          return `${condition} [${filter.column}] = '${filter.value}'`;
+        }).join(' ');
+        query += ` ${whereClause}`;
+      }
+
+      if (params.orderByColumn) {
+        query += ` ORDER BY [${params.orderByColumn}] ${params.orderDirection}`;
+      }
+
+      const currentTime = new Date().toLocaleTimeString();
+      setSqlCommand(prev => `${prev}\n-- [${currentTime}] Generated Query:\n${query}`);
+
+      const response = await fetch('http://localhost:3001/api/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          database: selectedDatabase,
+          rawQuery: query
+        }),
+      });
+
       const data = await response.json();
       
-      if (!data.success) {
-        console.error('Connection Error:', data.error);
-        alert(`Connection failed: ${data.error}`);
+      if (data.error) {
+        console.error('Query error:', data.error);
+        setSqlCommand(prev => `${prev}\n-- Error: ${data.error}`);
         return;
       }
+
+      if (data && data.length > 0) {
+        const gridColumns = Object.keys(data[0])
+          .filter(key => key !== 'id')
+          .map(key => ({
+            field: key,
+            headerName: key,
+            flex: 1,
+          }));
+        setColumns(gridColumns);
+      }
+
+      setResults(data || []);
       
-      alert(data.message);
+      const tableMatch = query.match(/FROM\s+\[?(\w+)\]?/i);
+      setActiveTableName(tableMatch ? tableMatch[1] : '');
+
     } catch (error) {
-      console.error('Connection Error:', error);
-      alert('Connection test failed: Unable to reach server');
+      console.error('API error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      setSqlCommand(prev => `${prev}\n-- Error: ${errorMessage}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDatabaseClick = async () => {
+
+  const handleSqlCommandToggle = () => {
+    setSqlCommandOpen(!sqlCommandOpen);
+  };
+
+  const handleCloseRelatedTab = (tabId: string) => {
+    setRelatedTabs(prev => prev.filter(tab => tab.id !== tabId));
+    setActiveTab('main');
+  };
+
+  const handleSqlExecute = async () => {
+    if (!sqlCommand.trim()) return;
+
+    setLoading(true);
+    setRelatedTabs([]);
+    setActiveTab('main');
+
     try {
-      const response = await fetch('http://localhost:3001/api/databases');
+      const response = await fetch('http://localhost:3001/api/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: sqlCommand,
+          database: selectedDatabase,
+          rawQuery: sqlCommand
+        }),
+      });
+
       const data = await response.json();
-      setDatabases(data);
+      
+      if (data.error) {
+        console.error('Query error:', data.error);
+        setSqlCommand(prev => `${prev}\n-- Error: ${data.error}`);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const gridColumns = Object.keys(data[0])
+          .filter(key => key !== 'id')
+          .map(key => ({
+            field: key,
+            headerName: key,
+            flex: 1,
+          }));
+        setColumns(gridColumns);
+      }
+
+      setResults(data || []);
+      
+      const tableMatch = sqlCommand.match(/FROM\s+\[?(\w+)\]?/i);
+      setActiveTableName(tableMatch ? tableMatch[1] : '');
+
+      const timestamp = new Date().toLocaleTimeString();
+      setSqlCommand(prev => `${prev}\n-- [${timestamp}] Executed:\n${sqlCommand}`);
+
     } catch (error) {
-      console.error('Error fetching databases:', error);
+      console.error('API error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      setSqlCommand(prev => `${prev}\n-- Error: ${errorMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopySQL = () => {
+    navigator.clipboard.writeText(sqlCommand);
+  };
+
+  const handleClearSQL = () => {
+    setSqlCommand('');
+  };
+
+  const handleTabChange = (_: React.SyntheticEvent, newValue: string) => {
+    setActiveTab(newValue);
+  };
+
+  const handleRelatedTableClick = async (targetTable: string, columnValue: any, constraints: Array<{ field: string, relatedField: string }>, clickedField: string) => {
+    setLoading(true);
+    try {
+      const matchingConstraint = constraints.find(c => c.field.toLowerCase() === clickedField.toLowerCase());
+      
+      if (!matchingConstraint) {
+        console.error('No matching constraint found for clicked field:', clickedField);
+        return;
+      }
+
+      const whereClause = `[${matchingConstraint.relatedField}] = ${typeof columnValue === 'string' ? `'${columnValue}'` : columnValue}`;
+      const query = `SELECT * FROM [${targetTable}] WHERE ${whereClause}`;
+      
+      console.log('Executing related query:', query);
+      
+      const [queryResponse, indexedColumnsResponse, tableIndexResponse] = await Promise.all([
+        fetch('http://localhost:3001/api/query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query,
+            database: selectedDatabase,
+            rawQuery: query
+          }),
+        }),
+        fetch(`http://localhost:3001/api/indexed-columns/${targetTable}`),
+        fetch(`http://localhost:3001/api/table-index/${targetTable}`)
+      ]);
+
+      if (!queryResponse.ok) {
+        throw new Error(`HTTP error! status: ${queryResponse.status}`);
+      }
+
+      const [data, indexedColumnsData, tableIndexData] = await Promise.all([
+        queryResponse.json(),
+        indexedColumnsResponse.json(),
+        tableIndexResponse.json()
+      ]);
+
+      if (data.error) {
+        console.error('Query error:', data.error);
+        setSqlCommand(prev => `${prev}\n-- Error: ${data.error}`);
+        return;
+      }
+
+      let gridColumns: any[] = [];
+      if (data && data.length > 0) {
+        gridColumns = Object.keys(data[0])
+          .filter(key => key !== 'id')
+          .map(key => ({
+            field: key,
+            headerName: key,
+            flex: 1,
+          }));
+      }
+
+      const newTabId = `${targetTable}-${Date.now()}`;
+      const newTab: RelatedTab = {
+        id: newTabId,
+        tableName: targetTable,
+        results: data || [],
+        columns: gridColumns,
+        indexedColumns: indexedColumnsData,
+        tableData: tableIndexData
+      };
+
+      setRelatedTabs(prev => [...prev, newTab]);
+      setActiveTab(newTabId);
+
+      const timestamp = new Date().toLocaleTimeString();
+      setSqlCommand(prev => `${prev}\n-- [${timestamp}] Related Query:\n${query}`);
+
+    } catch (error) {
+      console.error('API error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      setSqlCommand(prev => `${prev}\n-- Error: ${errorMessage}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -174,7 +396,6 @@ function App() {
         const data = await response.json();
         setIndexedColumns(data);
         
-        // Set table data with index information
         const tableIndexResponse = await fetch(`http://localhost:3001/api/table-index/${activeTableName}`);
         const tableIndexData = await tableIndexResponse.json();
         setTableData(tableIndexData);
@@ -183,406 +404,307 @@ function App() {
     }
   }, [activeTableName]);
 
-  const handleSqlQuerySubmit = async (query: string) => {
-    clearResults();
-    clearRelatedResults();
-    setLoading(true);
-    setActiveTableName('');
-    
-    try {
-      const response = await fetch('http://localhost:3001/api/query', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          database: selectedDatabase,
-          rawQuery: query
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.error) {
-        console.error('Query error:', data.error);
-        alert(data.error);
-        return;
-      }
-
-      // Extract column information from the first row
-      if (data.length > 0) {
-        const gridColumns = Object.keys(data[0])
-          .filter(key => key !== 'id')
-          .map(key => ({
-            field: key,
-            headerName: key,
-            flex: 1,
-          }));
-        setColumns(gridColumns);
-      }
-
-      setResults(data);
-
-      // Try to extract table name from SQL query
-      const tableMatch = query.match(/FROM\s+\[?(\w+)\]?/i);
-      setActiveTableName(tableMatch ? tableMatch[1].toUpperCase() : '');
-    } catch (error) {
-      console.error('Error executing SQL query:', error);
-      alert('Error executing SQL query. Check console for details.');
-      setActiveTableName('');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRelatedTableClick = async (targetTable: string, columnValue: any, constraints: Array<{ field: string; relatedField: string }> = []) => {
-    setLoading(true);
-    setRelatedTableName(targetTable);
-    
-    try {
-      // Fetch indexed columns and table data for the related table
-      const [indexedColumnsResponse, tableIndexResponse] = await Promise.all([
-        fetch(`http://localhost:3001/api/indexed-columns/${targetTable}`),
-        fetch(`http://localhost:3001/api/table-index/${targetTable}`)
-      ]);
-
-      const [indexedColumnsData, tableIndexData] = await Promise.all([
-        indexedColumnsResponse.json(),
-        tableIndexResponse.json()
-      ]);
-
-      // Set the indexed columns and table data for the related table
-      setRelatedIndexedColumns(indexedColumnsData);
-      setRelatedTableData(tableIndexData);
-
-      // Construct the WHERE clause using the relatedField from constraints
-      const whereClauses = constraints.map(({ relatedField }) => {
-        return `[${relatedField}] = '${columnValue}'`;
-      }).join(' AND ');
-
-      const query = `SELECT * FROM [${targetTable}] WHERE ${whereClauses}`;
-      console.log('Executing SQL Query:', query);
-
-      const response = await fetch('http://localhost:3001/api/query', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          database: selectedDatabase,
-          rawQuery: query
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.error) {
-        console.error('Query error:', data.error);
-        alert(data.error);
-        return;
-      }
-
-      // Extract column information from the first row
-      if (data.length > 0) {
-        const gridColumns = Object.keys(data[0])
-          .filter(key => key !== 'id')
-          .map(key => ({
-            field: key,
-            headerName: key,
-            flex: 1,
-          }));
-        setRelatedColumns(gridColumns);
-      }
-
-      setRelatedResults(data);
-      setActiveTab(1); // Switch to related results tab
-    } catch (error) {
-      console.error('Error executing related table query:', error);
-      alert('Error executing related table query. Check console for details.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setActiveTab(newValue);
-  };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <Box sx={{ display: 'flex' }}>
       <CssBaseline />
       
-      {/* Loading Overlay */}
-      {isLoadingTables && (
-        <Box
-          sx={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            bgcolor: 'rgba(0, 0, 0, 0.5)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'column',
-            gap: 2
-          }}
-        >
-          <CircularProgress sx={{ color: 'white' }} />
-          <Typography sx={{ color: 'white' }}>
-            Loading tables...
-          </Typography>
-        </Box>
-      )}
-
-      {/* Header with Toggle */}
+      {/* Top Bar */}
       <Box sx={{ 
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
+        width: '100%', 
         height: '48px',
         bgcolor: '#1e293b',
         borderBottom: '1px solid #334155',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        px: 2,
-        zIndex: 1200
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        zIndex: 1201,
+        px: 2
       }}>
-        {/* Left side */}
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <IconButton 
-            onClick={() => setDrawerOpen(!drawerOpen)}
+        <IconButton 
+          onClick={() => setDrawerOpen(!drawerOpen)}
+          sx={{ color: 'white', p: 1 }}
+        >
+          {drawerOpen ? <CloseIcon size={16} /> : <Menu size={16} />}
+        </IconButton>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', ml: 2 }}>
+          <DatabaseIcon size={14} className="text-gray-400" />
+          <FormControl 
+            size="small" 
             sx={{ 
-              mr: 2,
-              color: '#94a3b8',
-              '&:hover': {
-                color: '#e2e8f0'
-              }
+              ml: 1,
+              minWidth: 200,
+              '& .MuiOutlinedInput-root': {
+                color: 'white',
+                fontSize: 12,
+                '& fieldset': {
+                  borderColor: '#475569',
+                },
+                '&:hover fieldset': {
+                  borderColor: '#64748b',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#64748b',
+                },
+              },
             }}
           >
-            <Menu size={20} />
-          </IconButton>
-          <DatabaseIcon size={20} className="text-blue-400" color='white' />
-          <Typography 
-            variant="subtitle1" 
-            sx={{ 
-              ml: 1, 
-              fontWeight: 600, 
-              fontSize: 14,
-              color: '#ffffff'
-            }}
-          >
-            SQL Explorer
-          </Typography>
-        </Box>
-
-        {/* Right side - Database Selector */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '300px' }}>
-          <FormControl size="small" fullWidth>
             <Select
               value={selectedDatabase}
               onChange={(e) => handleDatabaseChange(e.target.value)}
-              onClick={handleDatabaseClick}
-              size="small"
               displayEmpty
               sx={{
-                fontSize: 13,
-                color: '#f1f5f9',
-                bgcolor: '#1e293b',
+                height: '32px',
+                bgcolor: '#334155',
                 '& .MuiSelect-select': {
-                  color: '#f1f5f9'
+                  py: 1,
                 },
-                '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#334155'
-                },
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#475569'
-                },
-                '& .MuiSelect-icon': {
-                  color: '#94a3b8'
-                },
-                '& .MuiMenuItem-root': {
-                  fontSize: 13,
-                  color: '#1f2937'
-                }
               }}
             >
-              <MenuItem value="" disabled sx={{ fontSize: 13, color: '#94a3b8' }}>
-                Choose a database
+              <MenuItem value="" sx={{ fontSize: 12 }}>
+                <em>Select Database</em>
               </MenuItem>
               {databases.map((db) => (
-                <MenuItem 
-                  key={db.id} 
-                  value={db.name}
-                  sx={{
-                    fontSize: 13,
-                    color: '#1f2937'
-                  }}
-                >
+                <MenuItem key={db.id} value={db.name} sx={{ fontSize: 12 }}>
                   {db.name}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
-          
-          <IconButton
-            onClick={testConnection}
-            disabled={!selectedDatabase}
-            sx={{ 
-              color: '#94a3b8',
-              '&:hover': {
-                color: '#e2e8f0'
-              }
-            }}
-          >
-            <DatabaseIcon size={18} />
-          </IconButton>
+          {isLoadingTables && (
+            <CircularProgress size={16} sx={{ ml: 2, color: '#64748b' }} />
+          )}
         </Box>
       </Box>
 
-      {/* Left Panel */}
-      <Box sx={{ 
-        width: drawerOpen ? '15.525vw' : 0,
-        flexShrink: 0,
-        transition: 'width 0.2s',
-        mt: '48px'
-      }}>
-        <LeftPanel
+      <Box sx={{ display: 'flex', mt: '48px', height: 'calc(100vh - 48px)', width: '100vw', overflow: 'hidden' }}>
+        {/* Left Panel with Query Builder */}
+        <LeftPanel 
           open={drawerOpen}
+          tables={tables}
+          selectedTable={selectedTable}
+          onTableChange={setSelectedTable}
+          onQuerySubmit={handleQuerySubmit}
+          isLoading={loading}
+          onTableSelect={handleTableSelect}
         />
-      </Box>
 
-      {/* Main Content */}
-      <Box sx={{ flexGrow: 1, p: 0, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        {/* Query Builder Section */}
-        <Box sx={{ 
-          borderBottom: '1px solid #e2e8f0',
-          bgcolor: '#f8fafc',
-          flex: '0 0 auto',
-          minWidth: 0,
-          overflow: 'auto'
+        {/* Main Content */}
+        <Box component="main" sx={{ 
+          flexGrow: 1, 
+          height: '100vh', 
+          display: 'flex', 
+          flexDirection: 'column',
+          overflow: 'hidden'
         }}>
-          <QueryBuilder
-            tables={tables}
-            selectedTable={selectedTable}
-            onTableChange={setSelectedTable}
-            onQuerySubmit={handleQuerySubmit}
-            onSqlQuerySubmit={handleSqlQuerySubmit}
-            isLoading={loading}
-          />
-        </Box>
-
-        {/* Results Section */}
-        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <Tabs 
-            value={activeTab} 
-            onChange={handleTabChange} 
-            sx={{ 
-              borderBottom: 1, 
-              borderColor: '#e2e8f0',
-              minHeight: 36,
-              bgcolor: '#f8fafc',
-              '& .MuiTabs-indicator': {
-                backgroundColor: '#3b82f6',
-                height: '4px'
-              }
+          {/* SQL Command Box */}
+          <Accordion 
+            expanded={sqlCommandOpen} 
+            onChange={handleSqlCommandToggle}
+            sx={{
+              boxShadow: 'none',
+              '&:before': {
+                display: 'none',
+              },
             }}
           >
-            <Tab 
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <span>{activeTableName || "Query Results"}</span>
-                </Box>
-              }
-              sx={{ 
-                fontSize: 12,
-                minHeight: 36,
-                textTransform: 'none',
-                px: 3,
-                py: 0,
-                color: '#64748b',
-                '&.Mui-selected': {
-                  color: '#3b82f6',
-                  fontWeight: 500
-                },
-                '&:hover': {
-                  color: '#3b82f6',
-                  opacity: 1
+            <AccordionSummary
+              expandIcon={<ChevronDown size={16} />}
+              sx={{
+                minHeight: '40px !important',
+                bgcolor: '#f8fafc',
+                borderTop: '1px solid #e2e8f0',
+                borderBottom: '1px solid #e2e8f0',
+                '& .MuiAccordionSummary-content': {
+                  margin: '8px 0 !important',
                 }
-              }} 
-            />
-            {relatedResults.length > 0 && (
-              <Tab 
-                label={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <span>{relatedTableName || "Related Results"}</span>
-                    <IconButton 
-                      size="small" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        clearRelatedResults();
-                        setActiveTab(0);
-                      }}
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Code size={14} />
+                <Typography sx={{ fontSize: '12px', fontWeight: 600 }}>SQL Command</Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails sx={{ p: 0 }}>
+              <Box sx={{pr:1, bgcolor: '#f8fafc' }}>
+                <CodeMirror
+                  value={sqlCommand}
+                  height="180px"
+                  extensions={[sql()]}
+                  onChange={(value) => setSqlCommand(value)}
+                  theme="dark"
+                  basicSetup={{
+                    lineNumbers: false,
+                    foldGutter: false,
+                    dropCursor: false,
+                    allowMultipleSelections: false,
+                    indentOnInput: false,
+                    highlightActiveLineGutter: false,
+                    highlightActiveLine: false,
+                  }}
+                  style={{
+                    fontSize: 13,
+                    fontFamily: 'monospace',
+                    backgroundColor: '#0f172a',
+                    borderRadius: '4px',
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      handleSqlExecute();
+                    }
+                  }}
+                />
+                
+                <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', mt: 1 }}>
+                  <Tooltip title="Copy SQL" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={handleCopySQL}
                       sx={{ 
-                        p: 0.2,
-                        '&:hover': { backgroundColor: 'rgba(0,0,0,0.04)' }
+                        p: 0.5,
+                        color: '#94a3b8',
+                        '&:hover': {
+                          color: '#e2e8f0',
+                          bgcolor: 'rgba(148, 163, 184, 0.1)'
+                        }
                       }}
                     >
-                      <CloseIcon size={10} />
+                      <Copy size={14} />
                     </IconButton>
-                  </Box>
-                }
-                sx={{ 
-                  fontSize: 12,
+                  </Tooltip>
+                  
+                  <Tooltip title="Clear SQL" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={handleClearSQL}
+                      sx={{ 
+                        p: 0.5,
+                        color: '#94a3b8',
+                        '&:hover': {
+                          color: '#e2e8f0',
+                          bgcolor: 'rgba(148, 163, 184, 0.1)'
+                        }
+                      }}
+                    >
+                      <X size={13} />
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Button
+                    variant="contained"
+                    onClick={handleSqlExecute}
+                    disabled={!sqlCommand.trim()}
+                    sx={{ 
+                      fontSize: '11px',
+                      textTransform: 'none',
+                      py: 0.5,
+                      px: 2,
+                      minWidth: 0,
+                      bgcolor: '#3b82f6',
+                      '&:hover': {
+                        bgcolor: '#2563eb',
+                      },
+                      '&:disabled': {
+                        bgcolor: '#1e293b',
+                        color: '#64748b'
+                      }
+                    }}
+                  >
+                    Execute
+                  </Button>
+                </Box>
+              </Box>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Results Content - Always Visible */}
+          <Box sx={{ 
+            flex: 1,
+            minHeight: 0,
+            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            p: 0
+          }}>
+            {/* Tabs */}
+            <Box sx={{ borderBottom: 1, borderColor: '#334155' }}>
+              <Tabs 
+                value={activeTab} 
+                onChange={handleTabChange}
+                sx={{
                   minHeight: 36,
-                  textTransform: 'none',
-                  px: 3,
-                  py: 0,
-                  color: '#64748b',
-                  '&.Mui-selected': {
-                    color: '#3b82f6',
-                    fontWeight: 500
-                  },
-                  '&:hover': {
-                    color: '#3b82f6',
-                    opacity: 1
+                  '& .MuiTab-root': {
+                    minHeight: 36,
+                    textTransform: 'none',
+                    fontSize: 13,
+                    fontWeight: 'normal'
                   }
-                }} 
-              />
-            )}
-          </Tabs>
+                }}
+              >
+                <Tab 
+                  value="main"
+                  label={activeTableName || 'Results'} 
+                  sx={{
+                    fontSize: 13,
+                    fontWeight: 'normal'
+                  }}
+                />
+                {relatedTabs.map(tab => (
+                  <Tab
+                    key={tab.id}
+                    value={tab.id}
+                    label={`${tab.tableName} (Related)`}
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 'normal'
+                    }}
+                    icon={
+                      <IconButton 
+                        size="small" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCloseRelatedTab(tab.id);
+                        }}
+                        sx={{ 
+                          ml: 1,
+                          p: 0.5,
+                          '&:hover': {
+                            bgcolor: 'rgba(0, 0, 0, 0.04)'
+                          }
+                        }}
+                      >
+                        <X size={14} />
+                      </IconButton>
+                    }
+                    iconPosition="end"
+                  />
+                ))}
+              </Tabs>
+            </Box>
 
-          <Box hidden={activeTab !== 0} sx={{ flexGrow: 1, overflow: 'auto', minHeight: 0 }}>
-            <ResultsGrid
-              rows={results}
-              columns={columns}
-              loading={loading}
-              indexedColumns={indexedColumns}
-              tableName={activeTableName}
-              tableData={tableData}
-              onRelatedTableClick={handleRelatedTableClick}
-            />
-          </Box>
-
-          <Box hidden={activeTab !== 1} sx={{ flexGrow: 1, overflow: 'auto', minHeight: 0 }}>
-            {relatedResults.length > 0 && (
-              <ResultsGrid
-                rows={relatedResults}
-                columns={relatedColumns}
+            {/* Results Grid */}
+            {activeTab === 'main' ? (
+              <ResultsGrid 
+                rows={results} 
+                columns={columns}
                 loading={loading}
-                indexedColumns={relatedIndexedColumns}
-                tableName={relatedTableName}
-                tableData={relatedTableData}
+                indexedColumns={indexedColumns}
+                tableName={activeTableName}
+                tableData={tableData}
+                onRelatedTableClick={handleRelatedTableClick}
+              />
+            ) : (
+              <ResultsGrid 
+                rows={relatedTabs.find(tab => tab.id === activeTab)?.results || []}
+                columns={relatedTabs.find(tab => tab.id === activeTab)?.columns || []}
+                loading={loading}
+                indexedColumns={relatedTabs.find(tab => tab.id === activeTab)?.indexedColumns || []}
+                tableName={relatedTabs.find(tab => tab.id === activeTab)?.tableName}
+                tableData={relatedTabs.find(tab => tab.id === activeTab)?.tableData}
                 onRelatedTableClick={handleRelatedTableClick}
               />
             )}

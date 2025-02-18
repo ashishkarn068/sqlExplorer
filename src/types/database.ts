@@ -13,7 +13,7 @@ export interface Column {
   type: string;
 }
 
-export interface Filter {
+export interface FilterType {
   column: string;
   value: string;
   condition: 'AND' | 'OR';
@@ -21,8 +21,9 @@ export interface Filter {
 
 export interface QueryParams {
   tableName: string;
-  filters: Filter[];
+  filters: FilterType[];
   orderByColumn?: string;
   orderDirection?: 'asc' | 'desc';
+  limit: number;
   rawQuery?: string;
 }
