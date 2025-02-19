@@ -1,6 +1,7 @@
 import os
 import xml.etree.ElementTree as ET
 import json
+import sys
 
 def find_ax_table_directories(base_directory):
     """
@@ -119,8 +120,15 @@ def extract_table_indexes(base_directory):
     print("Index data extracted and saved to tableIndex.json")
 
 if __name__ == "__main__":
-    base_directory_path = r"C:\git\ApplicationSuite\Source\Metadata"
+    import sys
+    
+    # Use command line argument if provided, otherwise use default path
+    base_directory_path = sys.argv[1] if len(sys.argv) > 1 else r"C:\git\ApplicationSuite\Source\Metadata"
+    
     if not os.path.exists(base_directory_path):
         print(f"Directory not found: {base_directory_path}")
-    else:
-        extract_table_indexes(base_directory_path) 
+        sys.exit(1)
+        
+    print(f"Using base directory: {base_directory_path}")
+    extract_table_indexes(base_directory_path)
+    print("Table indexes extraction completed successfully!")

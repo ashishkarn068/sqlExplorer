@@ -9,12 +9,10 @@ import {
   IconButton,
   TextField,
   Paper,
-  FormHelperText,
-  Autocomplete,
-  Tooltip
+  Autocomplete
 } from '@mui/material';
 import { Search, SortAsc, SortDesc, Database as DatabaseIcon, Plus as PlusIcon, Minus as MinusIcon, AlignCenter, X } from 'lucide-react';
-import { Table, Column, FilterType, QueryParams } from '../types/database';
+import { Table, FilterType, QueryParams } from '../types/database';
 
 interface QueryBuilderProps {
   tables: Table[];
