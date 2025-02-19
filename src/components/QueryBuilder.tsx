@@ -10,7 +10,8 @@ import {
   TextField,
   Paper,
   FormHelperText,
-  Autocomplete
+  Autocomplete,
+  Tooltip
 } from '@mui/material';
 import { Search, SortAsc, SortDesc, Database as DatabaseIcon, Plus as PlusIcon, Minus as MinusIcon, AlignCenter, X } from 'lucide-react';
 import { Table, Column, FilterType, QueryParams } from '../types/database';
@@ -174,16 +175,42 @@ export default function QueryBuilder({
               return option.name === value.name;
             }}
             renderOption={(props, option: Table) => (
-              <li
-                {...props}
-                key={option.name}
-                style={{
-                  fontSize: '10px', 
-                  padding: '4px 8px'
+              <Tooltip 
+                title={option.name}
+                placement="right"
+                arrow
+                enterDelay={500}
+                sx={{
+                  tooltip: {
+                    bgcolor: 'white',
+                    color: 'rgba(0, 0, 0, 0.87)',
+                    fontSize: '0.875rem',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    p: 1,
+                    borderRadius: 1
+                  },
+                  arrow: {
+                    color: 'white',
+                    '&:before': {
+                      border: '1px solid #e2e8f0'
+                    }
+                  }
                 }}
               >
-                {option.name}
-              </li>
+                <Box component="li" {...props} sx={{ 
+                  width: '100%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  fontSize: '11px',
+                  '&:hover': {
+                    bgcolor: '#f8fafc !important'
+                  }
+                }}>
+                  {option.name}
+                </Box>
+              </Tooltip>
             )}
             renderInput={(params) => (
               <TextField 
@@ -191,7 +218,7 @@ export default function QueryBuilder({
                 placeholder="Select table"
                 sx={{
                   '& .MuiInputBase-root': {
-                    fontSize: '11px'
+                    fontSize: '12px'
                   }
                 }}
               />
