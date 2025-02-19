@@ -174,44 +174,52 @@ export default function QueryBuilder({
               if (!option || !value) return false;
               return option.name === value.name;
             }}
-            renderOption={(props, option: Table) => (
-              <Tooltip 
-                title={option.name}
-                placement="right"
-                arrow
-                enterDelay={500}
-                sx={{
-                  tooltip: {
-                    bgcolor: 'white',
-                    color: 'rgba(0, 0, 0, 0.87)',
-                    fontSize: '0.875rem',
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                    p: 1,
-                    borderRadius: 1
-                  },
-                  arrow: {
-                    color: 'white',
-                    '&:before': {
-                      border: '1px solid #e2e8f0'
+            renderOption={(props, option: Table) => {
+              const { key, ...otherProps } = props;
+              return (
+                <Tooltip 
+                  key={key}
+                  title={option.name}
+                  placement="right"
+                  arrow
+                  enterDelay={500}
+                  sx={{
+                    tooltip: {
+                      bgcolor: 'white',
+                      color: 'rgba(0, 0, 0, 0.87)',
+                      fontSize: '0.875rem',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                      p: 1,
+                      borderRadius: 1
+                    },
+                    arrow: {
+                      color: 'white',
+                      '&:before': {
+                        border: '1px solid #e2e8f0'
+                      }
                     }
-                  }
-                }}
-              >
-                <Box component="li" {...props} sx={{ 
-                  width: '100%',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  fontSize: '11px',
-                  '&:hover': {
-                    bgcolor: '#f8fafc !important'
-                  }
-                }}>
-                  {option.name}
-                </Box>
-              </Tooltip>
-            )}
+                  }}
+                >
+                  <Box 
+                    component="li" 
+                    {...otherProps}
+                    sx={{ 
+                      width: '100%',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      fontSize: '11px',
+                      '&:hover': {
+                        bgcolor: '#f8fafc !important'
+                      }
+                    }}
+                  >
+                    {option.name}
+                  </Box>
+                </Tooltip>
+              );
+            }}
             renderInput={(params) => (
               <TextField 
                 {...params} 
