@@ -37,7 +37,8 @@ export default function QueryBuilder({
   const [orderByColumn, setOrderByColumn] = useState('');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('desc');
   const [limit, setLimit] = useState<number>(50);
-
+  const [tableFilterText, setTableFilterText] = useState('');
+  const [filteredTables, setFilteredTables] = useState<Table[]>([]);
 
   useEffect(() => {
     if (selectedTable && selectedTable.columns.some(col => col.name.toLowerCase() === 'recid')) {
@@ -48,6 +49,24 @@ export default function QueryBuilder({
       setOrderDirection('desc');
     }
   }, [selectedTable]);
+
+  useEffect(() => {
+    if (!tables || !Array.isArray(tables)) {
+      setFilteredTables([]);
+      return;
+    }
+
+    if (!tableFilterText) {
+      setFilteredTables(tables.slice(0, 100)); // Show first 100 tables by default
+      return;
+    }
+
+    const searchText = tableFilterText.toLowerCase();
+    const filtered = tables
+      .filter(table => table.name.toLowerCase().includes(searchText))
+      .slice(0, 100); // Limit to 100 results for performance
+    setFilteredTables(filtered);
+  }, [tables, tableFilterText]);
 
   const handleAutoCompleteChange = async (event: any, newValue: Table | null) => {
     onTableChange(newValue);
@@ -161,7 +180,7 @@ export default function QueryBuilder({
             clearOnBlur={false}
             clearOnEscape
             clearIcon={<X size={14} />}
-            options={Array.isArray(tables) ? tables : []}
+            options={filteredTables}
             getOptionLabel={(option: Table | null) => {
               if (!option) return '';
               return option.name || '';
@@ -170,67 +189,65 @@ export default function QueryBuilder({
             onChange={(event, newValue) => {
               handleAutoCompleteChange(event, newValue);
             }}
+            onInputChange={(event, value) => {
+              setTableFilterText(value);
+            }}
+            filterOptions={(x) => x} // Disable built-in filtering
+            loading={isLoading}
+            loadingText="Loading tables..."
+            noOptionsText={tableFilterText ? "No tables found" : "Type to search tables"}
             isOptionEqualToValue={(option: Table, value: Table) => {
               if (!option || !value) return false;
               return option.name === value.name;
             }}
+            ListboxProps={{
+              style: {
+                maxHeight: '300px'
+              }
+            }}
             renderOption={(props, option: Table) => {
               const { key, ...otherProps } = props;
               return (
-                <Tooltip 
-                  key={key}
-                  title={option.name}
-                  placement="right"
-                  arrow
-                  enterDelay={500}
+                <MenuItem 
+                  key={option.name} 
+                  {...otherProps}
                   sx={{
-                    tooltip: {
-                      bgcolor: 'white',
-                      color: 'rgba(0, 0, 0, 0.87)',
-                      fontSize: '0.875rem',
-                      border: '1px solid #e2e8f0',
-                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                      p: 1,
-                      borderRadius: 1
-                    },
-                    arrow: {
-                      color: 'white',
-                      '&:before': {
-                        border: '1px solid #e2e8f0'
-                      }
+                    fontSize: '11px',
+                    py: 0.5,
+                    px: 1,
+                    '&:hover': {
+                      backgroundColor: '#f1f5f9'
                     }
                   }}
                 >
-                  <Box 
-                    component="li" 
-                    {...otherProps}
-                    sx={{ 
-                      width: '100%',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      fontSize: '11px',
-                      '&:hover': {
-                        bgcolor: '#f8fafc !important'
-                      }
-                    }}
-                  >
-                    {option.name}
-                  </Box>
-                </Tooltip>
+                  {option.name}
+                </MenuItem>
               );
             }}
             renderInput={(params) => (
-              <TextField 
-                {...params} 
-                placeholder="Select table"
-                sx={{
-                  '& .MuiInputBase-root': {
-                    fontSize: '12px'
+              <TextField
+                {...params}
+                placeholder="Search tables..."
+                InputProps={{
+                  ...params.InputProps,
+                  sx: {
+                    '& .MuiOutlinedInput-input': {
+                      padding: '4px 8px',
+                      fontSize: '11px'
+                    }
                   }
                 }}
               />
             )}
+            sx={{
+              width: '100%',
+              '& .MuiAutocomplete-listbox': {
+                '& .MuiAutocomplete-option': {
+                  minHeight: '32px',
+                  padding: '4px 8px'
+                }
+              }
+            }}
           />
         </Paper>
       </Box>
