@@ -131,6 +131,16 @@ app.get('/api/tables/:database', async (req, res) => {
     const tables = [];
     let currentTable = null;
 
+    // Get index information from cache
+    const tableIndexData = DatabaseCache.getTables('tableIndex');
+    const indexLookup = new Map();
+    
+    if (tableIndexData) {
+      for (const table of tableIndexData) {
+        indexLookup.set(table.tableName.toLowerCase(), table.indexes || []);
+      }
+    }
+
     for (const row of result.recordset) {
       if (!currentTable || currentTable.name !== row.name) {
         if (currentTable) {
@@ -141,9 +151,17 @@ app.get('/api/tables/:database', async (req, res) => {
           columns: []
         };
       }
+
+      // Get index info for this column
+      const tableIndexes = indexLookup.get(row.name.toLowerCase()) || [];
+      const columnIndexes = tableIndexes.filter(index => 
+        index.columns.map(c => c.toLowerCase()).includes(row.column_name.toLowerCase())
+      );
+
       currentTable.columns.push({
         name: row.column_name,
-        type: row.data_type
+        type: row.data_type,
+        indexInfo: columnIndexes.length > 0 ? columnIndexes : null
       });
     }
 
