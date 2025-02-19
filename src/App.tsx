@@ -688,7 +688,7 @@ function App() {
             p: 0
           }}>
             {/* Tabs */}
-            <Box sx={{ borderBottom: 1, borderColor: '#334155' }}>
+            <Box>
               <Tabs 
                 value={activeTab} 
                 onChange={handleTabChange}
@@ -714,7 +714,7 @@ function App() {
                   label={
                     <Typography 
                       sx={{ 
-                        fontSize: 13,
+                        fontSize: 10,
                         fontWeight: 600
                       }}
                     >
@@ -773,7 +773,7 @@ function App() {
                             <Typography 
                               variant="body2" 
                               sx={{ 
-                                fontSize: 13,
+                                fontSize: 12,
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',

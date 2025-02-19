@@ -14,6 +14,7 @@ interface ResultsGridProps {
     indexes: Array<{
       indexName: string;
       columns: string[];
+      allowDuplicates?: boolean;
     }>;
   };
   onRelatedTableClick?: (
@@ -239,54 +240,92 @@ export default function ResultsGrid({
       
       const renderHeaderWithCopy = (params: GridColumnHeaderParams) => {
         let tooltipContent = '';
-        if (isIndexed) {
+
+        // Get indexes for this column
+        const columnIndexes = tableData?.indexes.filter(index => 
+          index.columns.map(c => c.toLowerCase()).includes(col.field.toLowerCase())
+        ) || [];
+
+        // Get relations for this column
+        const relevantRelations = relationData?.relations?.filter(rel => 
+          rel.constraints.some(c => c.field.toLowerCase() === col.field.toLowerCase())
+        ) || [];
+
+        if (columnIndexes.length > 0 || relevantRelations.length > 0) {
           tooltipContent = `
             <div style="padding: 8px;">
-              <div style="font-weight: 600; margin-bottom: 4px; color: #1976d2;">Index Information</div>
-              <div>${indexInfo?.indexName || 'Unknown'}</div>
+              ${columnIndexes.length > 0 ? `
+                <div style="margin-bottom: ${relevantRelations.length > 0 ? '16px' : '0'}">
+                  <div style="font-weight: 600; margin-bottom: 8px; color: #2e7d32;">Index Information</div>
+                  <div style="
+                    max-height: 300px; 
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    padding-right: 8px;
+                    margin-right: -8px;
+                  ">
+                    ${columnIndexes.map(index => `
+                      <div style="margin-bottom: 12px;">
+                        <div style="margin-bottom: 4px;">
+                          <b>${index.indexName}</b>
+                          <span style="
+                            font-size: 10px;
+                            color: ${index.allowDuplicates === false ? '#2e7d32' : '#666'};
+                            background: ${index.allowDuplicates === false ? '#e8f5e9' : '#f5f5f5'};
+                            padding: 2px 6px;
+                            border-radius: 4px;
+                            margin-left: 6px;
+                          ">
+                            ${index.allowDuplicates === false ? 'Unique' : index.allowDuplicates === undefined ? 'Unknown' : 'Non-Unique'}
+                          </span>
+                        </div>
+                        <div style="font-weight: 600; margin-bottom: 4px; color: #2e7d32;">Columns</div>
+                        <div style="font-family: monospace; font-size: 11px;">
+                          ${index.columns.map(column => 
+                            `<div style="margin-bottom: 2px;">
+                              <span style="color: #666;">•</span> ${column}${column.toLowerCase() === col.field.toLowerCase() ? ' <span style="color: #2e7d32">(current)</span>' : ''}
+                            </div>`
+                          ).join('')}
+                        </div>
+                      </div>
+                    `).join('<div style="border-top: 1px solid #e0e0e0; margin: 8px 0;"></div>')}
+                  </div>
+                </div>
+              ` : ''}
+              ${relevantRelations.length > 0 ? `
+                <div>
+                  <div style="font-weight: 600; margin-bottom: 8px; color: #1976d2;">Related Tables</div>
+                  <div style="
+                    max-height: 300px; 
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    padding-right: 8px;
+                    margin-right: -8px;
+                  ">
+                    ${relevantRelations.map(relation => `
+                      <div style="margin-bottom: 12px;">
+                        <div style="margin-bottom: 4px;"><b>${relation.relatedTable}</b></div>
+                        <div style="font-size: 11px; color: #666; margin-bottom: 8px;">
+                          ${relation.relationshipType} (${relation.cardinality})
+                        </div>
+                        <div style="font-weight: 600; margin-bottom: 4px; color: #1976d2;">Constraints</div>
+                        <div style="font-family: monospace; font-size: 11px;">
+                          ${relation.constraints.map(c => 
+                            `<div style="margin-bottom: 2px;">
+                              <span style="color: #666;">•</span> ${c.field} 
+                              <span style="color: #666;">→</span> 
+                              <span style="color: #1976d2;">${relation.relatedTable}</span>
+                              <span style="color: #666;">.</span>${c.relatedField}
+                            </div>`
+                          ).join('')}
+                        </div>
+                      </div>
+                    `).join('<div style="border-top: 1px solid #e0e0e0; margin: 8px 0;"></div>')}
+                  </div>
+                </div>
+              ` : ''}
             </div>
           `;
-        }
-        if (relationData?.relations) {
-          // Find all relations where this field is used in constraints
-          const relevantRelations = relationData.relations.filter(rel => 
-            rel.constraints.some(c => c.field.toLowerCase() === col.field.toLowerCase())
-          );
-
-          if (relevantRelations.length > 0) {
-            tooltipContent = `
-              <div style="padding: 8px;">
-                <div style="font-weight: 600; margin-bottom: 8px; color: #1976d2;">Related Tables</div>
-                <div style="
-                  max-height: 300px; 
-                  overflow-y: auto;
-                  overflow-x: hidden;
-                  padding-right: 8px;
-                  margin-right: -8px;
-                ">
-                  ${relevantRelations.map(relation => `
-                    <div style="margin-bottom: 12px;">
-                      <div style="margin-bottom: 4px;"><b>${relation.relatedTable}</b></div>
-                      <div style="font-size: 11px; color: #666; margin-bottom: 8px;">
-                        ${relation.relationshipType} (${relation.cardinality})
-                      </div>
-                      <div style="font-weight: 600; margin-bottom: 4px; color: #1976d2;">Constraints</div>
-                      <div style="font-family: monospace; font-size: 11px;">
-                        ${relation.constraints.map(c => 
-                          `<div style="margin-bottom: 2px;">
-                            <span style="color: #666;">•</span> ${c.field} 
-                            <span style="color: #666;">→</span> 
-                            <span style="color: #1976d2;">${relation.relatedTable}</span>
-                            <span style="color: #666;">.</span>${c.relatedField}
-                          </div>`
-                        ).join('')}
-                      </div>
-                    </div>
-                  `).join('<div style="border-top: 1px solid #e0e0e0; margin: 8px 0;"></div>')}
-                </div>
-              </div>
-            `;
-          }
         }
         
         return (
