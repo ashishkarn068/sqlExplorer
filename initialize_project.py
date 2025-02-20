@@ -25,6 +25,7 @@ ICONS = {
     'question': '❓',
     'sparkles': '✨',
     'tools': '🛠️',
+    'input': '📝',
 }
 
 DEFAULT_BASE_DIR = r"C:\git\ApplicationSuite\Source\Metadata"
@@ -161,63 +162,54 @@ def test_db_connection(server, database, driver):
         return False
 
 def get_user_input():
-    print(f"\n{ICONS['sparkles']} === SQL Explorer Project Initialization ===\n{ICONS['sparkles']}")
+    """Get database configuration from user."""
+    print(f"\n{ICONS['info']} SQL Explorer currently supports AxDbRain database system.")
+    print(f"{ICONS['info']} Default database will be 'AxDbRain' if no value is provided.")
     
-    # Get base directory path
-    while True:
-        base_dir = input(f"{ICONS['file']} Enter the base directory path of ApplicationSuite\\Source\\Metadata\n(Press Enter to use default: {DEFAULT_BASE_DIR}): ").strip()
-        
-        # Use default if no input
-        if not base_dir:
-            base_dir = DEFAULT_BASE_DIR
-            print(f"{ICONS['info']} Using default path: {base_dir}")
-        
-        if os.path.exists(base_dir):
-            break
-        print(f"{ICONS['error']} Error: Directory does not exist: {base_dir}")
-        print(f"{ICONS['info']} Please enter a valid path or press Enter to use the default path.")
+    config = {}
     
-    # Get database server name
+    # Get SQL Server name
     while True:
-        server_name = input(f"\n{ICONS['database']} Enter the SQL Server name (e.g., localhost\\SQLEXPRESS): ").strip()
+        server_name = input(f"\n{ICONS['input']} Enter your SQL Server name: ").strip()
         if server_name:
+            config['server_name'] = server_name
             break
-        print(f"{ICONS['error']} Error: Server name cannot be empty.")
+        print(f"{ICONS['error']} Server name cannot be empty. Please try again.")
     
-    # Get database name
-    while True:
-        db_name = input(f"\n{ICONS['database']} Enter the database name: ").strip()
-        if db_name:
-            break
-        print(f"{ICONS['error']} Error: Database name cannot be empty.")
+    # Get database name (default: AxDbRain)
+    db_name = input(f"\n{ICONS['input']} Enter database name (press Enter for 'AxDbRain'): ").strip()
+    config['db_name'] = db_name if db_name else 'AxDbRain'
+    print(f"{ICONS['info']} Using database: {config['db_name']}")
     
-    # Default driver
-    db_driver = "ODBC Driver 17 for SQL Server"
-    print(f"\n{ICONS['info']} Using default SQL Server driver: {db_driver}")
+    # Set the SQL Server driver
+    config['db_driver'] = 'ODBC Driver 17 for SQL Server'
+    print(f"\n{ICONS['info']} Using SQL Server driver: {config['db_driver']}")
     
-    return {
-        'base_dir': base_dir,
-        'server_name': server_name,
-        'db_name': db_name,
-        'db_driver': db_driver
-    }
+    # Set base directory
+    config['base_dir'] = str(Path(__file__).parent)
+    
+    return config
 
 def create_env_file(config):
-    env_content = f"""DB_SERVER='{config['server_name']}'
-DB_NAME='{config['db_name']}'
-DB_DRIVER='{config['db_driver']}'
-PORT=3001"""
-    
-    env_path = RESOURCES_DIR / '.env'
+    """Create .env file with database configuration."""
     try:
-        # Create backend directory if it doesn't exist
-        env_path.parent.mkdir(parents=True, exist_ok=True)
+        # Create .env file in the backend directory
+        env_path = Path(__file__).parent / 'backend' / '.env'
         
+        env_content = (
+            f"DB_SERVER={config['server_name']}\n"
+            f"DB_NAME={config['db_name']}\n"
+            f"DB_DRIVER={config['db_driver']}\n"
+            "PORT=3001\n"
+        )
+        
+        print(f"\n{ICONS['file']} Creating .env file in backend directory...")
         with open(env_path, 'w') as f:
             f.write(env_content)
-        print(f"\n{ICONS['file']} Created .env file at {env_path}")
+        print(f"{ICONS['success']} Successfully created .env file")
+        
     except Exception as e:
-        print(f"\n{ICONS['error']} Error creating .env file: {e}")
+        print(f"{ICONS['error']} Error creating .env file: {e}")
         raise
 
 def get_user_confirmation(file_type):
@@ -291,72 +283,28 @@ def run_script(script_name, base_dir):
         print(f"{ICONS['error']} Error output: {e.stderr.strip()}")
         raise
 
-def install_node_modules(directory: Path, context: str = ""):
-    """Install node modules in the specified directory."""
-    try:
-        print(f"\n{ICONS['node']} Installing Node.js dependencies{' for ' + context if context else ''}...")
-        
-        # Check if node_modules exists and package-lock.json exists but not node_modules
-        node_modules = directory / 'node_modules'
-        package_lock = directory / 'package-lock.json'
-        package_json = directory / 'package.json'
-        
-        if not package_json.exists():
-            raise FileNotFoundError(f"package.json not found in {directory}")
-            
-        if node_modules.exists() and package_lock.exists():
-            response = input(f"{ICONS['question']} Node modules already exist. Reinstall? (y/N): ").strip().lower()
-            if response not in ['y', 'yes']:
-                print(f"{ICONS['info']} Skipping Node.js dependencies installation")
-                return True
-        
-        with Spinner(f"Installing dependencies{' for ' + context if context else ''}"):
-            # First clean install
-            subprocess.run(
-                ['npm', 'ci'],
-                check=True,
-                capture_output=True,
-                text=True,
-                cwd=directory
-            )
-            
-            # Then run npm install to handle any remaining dependencies
-            subprocess.run(
-                ['npm', 'install'],
-                check=True,
-                capture_output=True,
-                text=True,
-                cwd=directory
-            )
-            
-        print(f"{ICONS['success']} Successfully installed Node.js dependencies{' for ' + context if context else ''}")
-        return True
-        
-    except subprocess.CalledProcessError as e:
-        print(f"{ICONS['error']} Error installing dependencies: {e.stderr}")
-        return False
-    except Exception as e:
-        print(f"{ICONS['error']} Error: {str(e)}")
-        return False
-
 def print_next_steps():
     print(f"\n{ICONS['sparkles']} === Next Steps === {ICONS['sparkles']}")
-    print(f"\n1. {ICONS['terminal']} Start the development server:")
-    print("   - Open a terminal in the project root directory")
+    print(f"\n1. {ICONS['node']} Install dependencies:")
+    print("   - In the project root directory, run: npm install")
+    print("   - Then navigate to backend directory: cd backend")
+    print("   - Install backend dependencies: npm install")
+    print(f"\n2. {ICONS['terminal']} Start the development server:")
+    print("   - Return to root directory: cd ..")
     print("   - Run: npm run dev")
-    print(f"\n2. {ICONS['terminal']} Start the backend server:")
+    print(f"\n3. {ICONS['terminal']} Start the backend server:")
     print("   - Open another terminal")
     print("   - Navigate to the backend directory: cd backend")
     print("   - Run: npm start")
-    print(f"\n{ICONS['web']} Once both servers are running, open your browser to: http://localhost:3000")
-    print(f"\n{ICONS['rocket']} Happy coding!")
+    print(f"\n{ICONS['sparkles']} Time to explore your data! {ICONS['sparkles']}")
+    print(f"{ICONS['database']} SELECT * FROM happiness WHERE tool = 'SQLExplorer' {ICONS['rocket']}")
 
 def main():
     try:
         print(f"\n{ICONS['sparkles']} === SQL Explorer Project Initialization === {ICONS['sparkles']}\n")
         
         # Check Node.js installation
-        with Spinner(f"{ICONS['node']} Checking Node.js installation"):
+        with Spinner(f"Checking Node.js {ICONS['node']} installation"):
             check_node_installation()
         
         # Get user input
@@ -397,20 +345,6 @@ def main():
             print(f"\n{ICONS['tools']} Generating selected metadata files...")
             for script_name, _ in files_to_generate:
                 run_script(script_name, config['base_dir'])
-        
-        # Install Node.js dependencies
-        root_dir = Path(__file__).parent
-        backend_dir = root_dir / 'backend'
-        
-        # Install dependencies in root directory
-        if not install_node_modules(root_dir, "frontend"):
-            print(f"{ICONS['error']} Failed to install frontend dependencies. Please run 'npm install' manually.")
-            return 1
-            
-        # Install dependencies in backend directory
-        if not install_node_modules(backend_dir, "backend"):
-            print(f"{ICONS['error']} Failed to install backend dependencies. Please run 'npm install' manually in the backend directory.")
-            return 1
         
         print(f"\n{ICONS['sparkles']} === Project initialization completed successfully! === {ICONS['sparkles']}")
         
