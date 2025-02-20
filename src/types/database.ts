@@ -13,11 +13,33 @@ export interface Column {
   type: string;
 }
 
+export interface FilterType {
+  column: string;
+  value: string;
+  condition: 'AND' | 'OR';
+}
+
 export interface QueryParams {
-  tableName?: string;
-  whereColumn?: string;
-  whereValue?: string;
+  tableName: string;
+  filters: FilterType[];
   orderByColumn?: string;
   orderDirection?: 'asc' | 'desc';
+  limit: number;
   rawQuery?: string;
+}
+
+export interface Relation {
+  name: string;
+  relatedTable: string;
+  cardinality: string;
+  relationshipType: string;
+  constraints: Array<{
+    field: string;
+    relatedField: string;
+  }>;
+}
+
+export interface RelationData {
+  tableName: string;
+  relations: Relation[];
 }
