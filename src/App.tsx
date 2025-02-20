@@ -96,8 +96,18 @@ function App() {
     setLoading(true);
     setRelatedTabs([]);
     setActiveTab('main');
+    setActiveTableName(params.tableName);
 
     try {
+      // Fetch index information first
+      const indexResponse = await fetch(`http://localhost:3001/api/indexed-columns/${params.tableName}`);
+      const indexData = await indexResponse.json();
+      setIndexedColumns(indexData);
+      
+      const tableIndexResponse = await fetch(`http://localhost:3001/api/table-index/${params.tableName}`);
+      const tableIndexData = await tableIndexResponse.json();
+      setTableData(tableIndexData);
+
       // Construct the query
       let query = `SELECT TOP ${params.limit} * FROM [${params.tableName}]`;
 
@@ -149,7 +159,6 @@ function App() {
       }
 
       setResults(data || []);
-      setActiveTableName(params.tableName);
 
     } catch (error) {
       console.error('API error:', error);
@@ -405,22 +414,6 @@ function App() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (activeTableName) {
-      const fetchIndexedColumns = async () => {
-        const response = await fetch(`http://localhost:3001/api/indexed-columns/${activeTableName}`);
-        const data = await response.json();
-        setIndexedColumns(data);
-        
-        const tableIndexResponse = await fetch(`http://localhost:3001/api/table-index/${activeTableName}`);
-        const tableIndexData = await tableIndexResponse.json();
-        setTableData(tableIndexData);
-      };
-      fetchIndexedColumns();
-    }
-  }, [activeTableName]);
-
 
   return (
     <Box sx={{ display: 'flex' }}>
