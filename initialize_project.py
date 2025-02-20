@@ -291,60 +291,16 @@ def run_script(script_name, base_dir):
         print(f"{ICONS['error']} Error output: {e.stderr.strip()}")
         raise
 
-def install_node_modules(directory: Path, context: str = ""):
-    """Install node modules in the specified directory."""
-    try:
-        print(f"\n{ICONS['node']} Installing Node.js dependencies{' for ' + context if context else ''}...")
-        
-        # Check if node_modules exists and package-lock.json exists but not node_modules
-        node_modules = directory / 'node_modules'
-        package_lock = directory / 'package-lock.json'
-        package_json = directory / 'package.json'
-        
-        if not package_json.exists():
-            raise FileNotFoundError(f"package.json not found in {directory}")
-            
-        if node_modules.exists() and package_lock.exists():
-            response = input(f"{ICONS['question']} Node modules already exist. Reinstall? (y/N): ").strip().lower()
-            if response not in ['y', 'yes']:
-                print(f"{ICONS['info']} Skipping Node.js dependencies installation")
-                return True
-        
-        with Spinner(f"Installing dependencies{' for ' + context if context else ''}"):
-            # First clean install
-            subprocess.run(
-                ['npm', 'ci'],
-                check=True,
-                capture_output=True,
-                text=True,
-                cwd=directory
-            )
-            
-            # Then run npm install to handle any remaining dependencies
-            subprocess.run(
-                ['npm', 'install'],
-                check=True,
-                capture_output=True,
-                text=True,
-                cwd=directory
-            )
-            
-        print(f"{ICONS['success']} Successfully installed Node.js dependencies{' for ' + context if context else ''}")
-        return True
-        
-    except subprocess.CalledProcessError as e:
-        print(f"{ICONS['error']} Error installing dependencies: {e.stderr}")
-        return False
-    except Exception as e:
-        print(f"{ICONS['error']} Error: {str(e)}")
-        return False
-
 def print_next_steps():
     print(f"\n{ICONS['sparkles']} === Next Steps === {ICONS['sparkles']}")
-    print(f"\n1. {ICONS['terminal']} Start the development server:")
-    print("   - Open a terminal in the project root directory")
+    print(f"\n1. {ICONS['node']} Install dependencies:")
+    print("   - In the project root directory, run: npm install")
+    print("   - Then navigate to backend directory: cd backend")
+    print("   - Install backend dependencies: npm install")
+    print(f"\n2. {ICONS['terminal']} Start the development server:")
+    print("   - Return to root directory: cd ..")
     print("   - Run: npm run dev")
-    print(f"\n2. {ICONS['terminal']} Start the backend server:")
+    print(f"\n3. {ICONS['terminal']} Start the backend server:")
     print("   - Open another terminal")
     print("   - Navigate to the backend directory: cd backend")
     print("   - Run: npm start")
@@ -356,7 +312,7 @@ def main():
         print(f"\n{ICONS['sparkles']} === SQL Explorer Project Initialization === {ICONS['sparkles']}\n")
         
         # Check Node.js installation
-        with Spinner(f"{ICONS['node']} Checking Node.js installation"):
+        with Spinner(f"Checking Node.js {ICONS['node']} installation"):
             check_node_installation()
         
         # Get user input
@@ -397,20 +353,6 @@ def main():
             print(f"\n{ICONS['tools']} Generating selected metadata files...")
             for script_name, _ in files_to_generate:
                 run_script(script_name, config['base_dir'])
-        
-        # Install Node.js dependencies
-        root_dir = Path(__file__).parent
-        backend_dir = root_dir / 'backend'
-        
-        # Install dependencies in root directory
-        if not install_node_modules(root_dir, "frontend"):
-            print(f"{ICONS['error']} Failed to install frontend dependencies. Please run 'npm install' manually.")
-            return 1
-            
-        # Install dependencies in backend directory
-        if not install_node_modules(backend_dir, "backend"):
-            print(f"{ICONS['error']} Failed to install backend dependencies. Please run 'npm install' manually in the backend directory.")
-            return 1
         
         print(f"\n{ICONS['sparkles']} === Project initialization completed successfully! === {ICONS['sparkles']}")
         
