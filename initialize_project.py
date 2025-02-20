@@ -203,21 +203,25 @@ def get_user_input():
     }
 
 def create_env_file(config):
-    env_content = f"""DB_SERVER='{config['server_name']}'
-DB_NAME='{config['db_name']}'
-DB_DRIVER='{config['db_driver']}'
-PORT=3001"""
-    
-    env_path = RESOURCES_DIR / '.env'
+    """Create .env file with database configuration."""
     try:
-        # Create backend directory if it doesn't exist
-        env_path.parent.mkdir(parents=True, exist_ok=True)
+        # Create .env file in the backend directory
+        env_path = Path(__file__).parent / 'backend' / '.env'
         
+        env_content = (
+            f"DB_SERVER={config['server_name']}\n"
+            f"DB_NAME={config['db_name']}\n"
+            f"DB_DRIVER={config['db_driver']}\n"
+            "PORT=3001\n"
+        )
+        
+        print(f"\n{ICONS['file']} Creating .env file in backend directory...")
         with open(env_path, 'w') as f:
             f.write(env_content)
-        print(f"\n{ICONS['file']} Created .env file at {env_path}")
+        print(f"{ICONS['success']} Successfully created .env file")
+        
     except Exception as e:
-        print(f"\n{ICONS['error']} Error creating .env file: {e}")
+        print(f"{ICONS['error']} Error creating .env file: {e}")
         raise
 
 def get_user_confirmation(file_type):
