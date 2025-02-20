@@ -296,8 +296,8 @@ def print_next_steps():
     print("   - Open another terminal")
     print("   - Navigate to the backend directory: cd backend")
     print("   - Run: npm start")
-    print(f"\n{ICONS['web']} Once both servers are running, open your browser to: http://localhost:3000")
-    print(f"\n{ICONS['rocket']} Happy coding!")
+    print(f"\n{ICONS['sparkles']} Time to explore your data! {ICONS['sparkles']}")
+    print(f"{ICONS['database']} SELECT * FROM happiness WHERE tool = 'SQLExplorer' {ICONS['rocket']}")
 
 def main():
     try:
