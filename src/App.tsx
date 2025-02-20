@@ -158,6 +158,10 @@ function App() {
       setSqlCommand(prev => `${prev}\n-- Error: ${errorMessage}`);
     } finally {
       setLoading(false);
+      const gridElement = document.querySelector('.MuiDataGrid-virtualScroller');
+      if (gridElement) {
+        gridElement.scrollLeft = 0;
+      }
     }
   };
 
@@ -215,6 +219,10 @@ function App() {
       setSqlCommand(prev => `${prev}\n-- Error: ${errorMessage}`);
     } finally {
       setLoading(false);
+      const gridElement = document.querySelector('.MuiDataGrid-virtualScroller');
+      if (gridElement) {
+        gridElement.scrollLeft = 0;
+      }
     }
   };
 
@@ -346,6 +354,10 @@ function App() {
       setSqlCommand(prev => `${prev}\n-- Error: ${errorMessage}`);
     } finally {
       setLoading(false);
+      const gridElement = document.querySelector('.MuiDataGrid-virtualScroller');
+      if (gridElement) {
+        gridElement.scrollLeft = 0;
+      }
     }
   };
 

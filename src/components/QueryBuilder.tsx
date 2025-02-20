@@ -506,17 +506,19 @@ export default function QueryBuilder({
         <Paper 
           elevation={0} 
           sx={{ 
-            p: 1,
+            p: 1.5,
             width: '100%',
             bgcolor: 'white',
             border: '1px solid #e2e8f0',
             display: 'flex',
             flexDirection: 'column',
-            gap: 1
+            gap: 1,
+            mt: 2,
+            mb: 2,
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', height: 20 }}>
-            <Typography variant="body2" sx={{ ml: 1, fontSize: 11, color: '#64748b' }}>Group By</Typography>
+            <Typography variant="body2" sx={{ ml: 1, fontSize: 12, fontWeight: 500, color: '#64748b' }}>Group By</Typography>
           </Box>
           
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>

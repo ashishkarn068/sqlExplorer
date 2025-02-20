@@ -1,5 +1,5 @@
 import { DataGrid, GridColDef, GridColumnHeaderParams, GridRenderCellParams } from '@mui/x-data-grid';
-import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip, Link, IconButton } from '@mui/material';
+import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip, Link, IconButton, Backdrop, CircularProgress } from '@mui/material';
 import { Table as TableIcon, Copy as CopyIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Relation, RelationData } from '../types/database';
@@ -63,9 +63,9 @@ export default function ResultsGrid({
 
   const styles = `
     .indexed-column {
-      background-color: #e8f5e9;
-      color: #2e7d32;
-      font-weight: 600;
+      background-color: #e8f5e9 !important;
+      color: #2e7d32 !important;
+      font-weight: 600 !important;
     }
     .related-column {
       color: #1976d2;
@@ -126,7 +126,7 @@ export default function ResultsGrid({
       });
 
       const columnClassName = `${highlightEnabled && isIndexed ? 'indexed-column' : ''} ${relation ? 'related-column' : ''}`;
-      
+
       const renderCellWithCopy = (params: GridRenderCellParams) => {
         const formatValue = (value: any) => {
           if (value === null || value === undefined) {
@@ -382,17 +382,17 @@ export default function ResultsGrid({
         ...col,
         width,
         minWidth: width,
+        headerClassName: columnClassName,
+        cellClassName: columnClassName,
         renderCell: renderCellWithCopy,
         renderHeader: renderHeaderWithCopy,
         headerAlign: 'center' as const,
         align: 'center' as const,
-        headerClassName: columnClassName,
-        cellClassName: columnClassName,
       };
     });
 
     setAdjustedColumns(adjustedColumns);
-  }, [columns, safeRows, indexedColumns, relationData]);
+  }, [columns, safeRows, indexedColumns, relationData, highlightEnabled]);
 
   // Log indexed columns when data is loaded
   useEffect(() => {
@@ -402,163 +402,171 @@ export default function ResultsGrid({
   }, [safeRows, indexedColumns]);
 
   return (
-    <>
+    <Box sx={{ height: '100%', position: 'relative' }}>
       <style>{styles}</style>
-      <Paper 
-        elevation={0} 
-        sx={{ 
-          width: '100%',
-          bgcolor: '#f8fafc',
+
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'flex-end', 
+        gap: 2, 
+        mb: 1,
+        alignItems: 'center'
+      }}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={hideEmptyEnabled}
+              onChange={toggleHideEmpty}
+              size="small"
+            />
+          }
+          label={
+            <Typography variant="body2" sx={{ fontSize: '12px' }}>
+              Hide Empty Columns
+            </Typography>
+          }
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              checked={highlightEnabled}
+              onChange={toggleHighlight}
+              size="small"
+            />
+          }
+          label={
+            <Typography variant="body2" sx={{ fontSize: '12px' }}>
+              Highlight Index
+            </Typography>
+          }
+        />
+      </Box>
+
+      <Box sx={{ 
+        height: 'calc(100% - 40px)', 
+        position: 'relative',
+        '& .MuiDataGrid-root': {
           border: '1px solid #e2e8f0',
-          borderRadius: 2,
-          p: 1,
-          mt: 2
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <TableIcon size={12} className="text-gray-600" />
-          <Typography variant="subtitle1" sx={{ ml: 1, fontWeight: 600, fontSize: 12 }}>
-            {tableName ? `${tableName} - Query Results` : 'Query Results'}
-          </Typography>
-          <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary', fontSize: 12 }}>
-            {safeRows.length} rows
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 0, ml: 'auto' }}>
-            <FormControlLabel
-              control={<Switch checked={hideEmptyEnabled} onChange={toggleHideEmpty} size="small" />}
-              label="Hide Empty"
-              sx={{ 
-                '& .MuiFormControlLabel-label': {
-                  fontSize: 12
-                }
-              }}
-            />
-            <FormControlLabel
-              control={<Switch checked={highlightEnabled} onChange={toggleHighlight} size="small" />}
-              label="Highlight Index"
-              sx={{ 
-                '& .MuiFormControlLabel-label': {
-                  fontSize: 12
-                }
-              }}
-            />
-          </Box>
-        </Box>
-        
-        <Paper 
-          elevation={0} 
-          sx={{ 
-            bgcolor: 'white',
-            border: '1px solid #e2e8f0'
+          bgcolor: 'white',
+          fontSize: '11px'
+        }
+      }}>
+        <Backdrop
+          open={loading}
+          sx={{
+            position: 'absolute',
+            zIndex: 1,
+            backgroundColor: 'rgba(255, 255, 255, 0.7)',
+            color: '#1976d2'
           }}
         >
-          <DataGrid
-            rows={safeRows}
-            columns={adjustedColumns.filter(col => 
-              !hideEmptyEnabled || filteredColumns.some(fc => fc.field === col.field)
-            )}
-            loading={loading}
-            pagination
-            pageSizeOptions={[25, 50, 100]}
-            disableRowSelectionOnClick
-            getRowId={(row) => row.id || Math.random()}
-            autoHeight={false}
-            density="compact"
-            initialState={{
-              pagination: { paginationModel: { pageSize: 25 } },
-            }}
-            components={{
-              NoRowsOverlay: () => (
-                <Box 
-                  sx={{ 
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    p: 3,
-                    color: 'text.secondary'
-                  }}
-                >
-                  <Box sx={{ mb: 2 }}>
-                    <TableIcon size={48} strokeWidth={1} />
-                  </Box>
-                  <Typography variant="h6" sx={{ mb: 1, color: 'text.primary' }}>
-                    No Records Found
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" align="center">
-                    {tableName ? 
-                      `No records found in table "${tableName}". Try modifying your query or filters.` :
-                      'Select a table or write a query to see results here.'}
-                  </Typography>
+          <CircularProgress color="inherit" size={40} />
+        </Backdrop>
+        <DataGrid
+          rows={safeRows}
+          columns={adjustedColumns.filter(col => 
+            !hideEmptyEnabled || filteredColumns.some(fc => fc.field === col.field)
+          )}
+          pagination
+          pageSizeOptions={[25, 50, 100]}
+          disableRowSelectionOnClick
+          getRowId={(row) => row.id || Math.random()}
+          autoHeight={false}
+          density="compact"
+          initialState={{
+            pagination: { paginationModel: { pageSize: 25 } },
+          }}
+          components={{
+            NoRowsOverlay: () => (
+              <Box 
+                sx={{ 
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  p: 3,
+                  color: 'text.secondary'
+                }}
+              >
+                <Box sx={{ mb: 2 }}>
+                  <TableIcon size={48} strokeWidth={1} />
                 </Box>
-              )
-            }}
-            sx={{
-              border: 'none',
-              height: 'calc(100vh - 265px)',
-              '& .MuiDataGrid-main': {
-                overflow: 'auto !important',
-                scrollbarWidth: 'thin',
-                scrollBehavior: 'smooth',
-                '&::-webkit-scrollbar': {
-                  width: '6px',
-                  height: '6px',
-                },
-                '&::-webkit-scrollbar-track': {
-                  background: 'transparent',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  background: '#cbd5e1',
-                  borderRadius: '3px',
-                  '&:hover': {
-                    background: '#94a3b8',
-                  },
+                <Typography variant="h6" sx={{ mb: 1, color: 'text.primary' }}>
+                  No Records Found
+                </Typography>
+                <Typography variant="body2" color="text.secondary" align="center">
+                  {tableName ? 
+                    `No records found in table "${tableName}". Try modifying your query or filters.` :
+                    'Select a table or write a query to see results here.'}
+                </Typography>
+              </Box>
+            )
+          }}
+          sx={{
+            border: 'none',
+            height: 'calc(100vh - 265px)',
+            '& .MuiDataGrid-main': {
+              overflow: 'auto !important',
+              scrollbarWidth: 'thin',
+              scrollBehavior: 'smooth',
+              '&::-webkit-scrollbar': {
+                width: '6px',
+                height: '6px',
+              },
+              '&::-webkit-scrollbar-track': {
+                background: 'transparent',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: '#cbd5e1',
+                borderRadius: '3px',
+                '&:hover': {
+                  background: '#94a3b8',
                 },
               },
-              '& .MuiDataGrid-columnHeaders': {
-                bgcolor: '#f8fafc',
-                borderBottom: '1px solid #e2e8f0',
-                fontSize: '11px',
-                fontWeight: 600,
-                '& .MuiDataGrid-columnHeader': {
-                  padding: '6px 8px',
-                  height: '32px',
-                  '& .MuiDataGrid-columnHeaderTitle': {
-                    fontWeight: 600,
-                    whiteSpace: 'normal',
-                    lineHeight: 1.2,
-                    overflow: 'visible'
-                  }
+            },
+            '& .MuiDataGrid-columnHeaders': {
+              bgcolor: '#f8fafc',
+              borderBottom: '1px solid #e2e8f0',
+              fontSize: '11px',
+              fontWeight: 600,
+              '& .MuiDataGrid-columnHeader': {
+                padding: '6px 8px',
+                height: '32px',
+                '& .MuiDataGrid-columnHeaderTitle': {
+                  fontWeight: 600,
+                  whiteSpace: 'normal',
+                  lineHeight: 1.2,
+                  overflow: 'visible'
                 }
-              },
-              '& .MuiDataGrid-cell': {
-                borderBottom: '1px solid #f1f5f9',
-                fontSize: '11px',
-                padding: '4px 8px',
-                whiteSpace: 'normal',
-                overflow: 'visible'
-              },
-              '& .MuiDataGrid-row': {
-                maxHeight: '32px !important',
-                minHeight: '32px !important'
-              },
-              '& .MuiDataGrid-overlay': {
-                bgcolor: 'transparent',
-                color: '#64748b',
-                fontSize: '11px'
-              },
-              '& .MuiTablePagination-root': {
-                fontSize: '11px'
-              },
-              '& .MuiDataGrid-footerContainer': {
-                borderTop: '1px solid #e2e8f0',
-                fontSize: '11px'
               }
-            }}
-          />
-        </Paper>
-      </Paper>
-    </>
+            },
+            '& .MuiDataGrid-cell': {
+              borderBottom: '1px solid #f1f5f9',
+              fontSize: '11px',
+              padding: '4px 8px',
+              whiteSpace: 'normal',
+              overflow: 'visible'
+            },
+            '& .MuiDataGrid-row': {
+              maxHeight: '32px !important',
+              minHeight: '32px !important'
+            },
+            '& .MuiDataGrid-overlay': {
+              bgcolor: 'transparent',
+              color: '#64748b',
+              fontSize: '11px'
+            },
+            '& .MuiTablePagination-root': {
+              fontSize: '11px'
+            },
+            '& .MuiDataGrid-footerContainer': {
+              borderTop: '1px solid #e2e8f0',
+              fontSize: '11px'
+            }
+          }}
+        />
+      </Box>
+    </Box>
   );
 }
