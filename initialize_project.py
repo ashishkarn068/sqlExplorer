@@ -168,6 +168,21 @@ def get_user_input():
     
     config = {}
     
+    # Get base directory path
+    while True:
+        base_dir = input(f"\n{ICONS['file']} Enter the base directory path of ApplicationSuite\\Source\\Metadata\n(Press Enter to use default: {DEFAULT_BASE_DIR}): ").strip()
+        
+        # Use default if no input
+        if not base_dir:
+            base_dir = DEFAULT_BASE_DIR
+            print(f"{ICONS['info']} Using default path: {base_dir}")
+        
+        if os.path.exists(base_dir):
+            config['base_dir'] = base_dir
+            break
+        print(f"{ICONS['error']} Error: Directory does not exist: {base_dir}")
+        print(f"{ICONS['info']} Please enter a valid path or press Enter to use the default path.")
+    
     # Get SQL Server name
     while True:
         server_name = input(f"\n{ICONS['input']} Enter your SQL Server name: ").strip()
@@ -184,9 +199,6 @@ def get_user_input():
     # Set the SQL Server driver
     config['db_driver'] = 'ODBC Driver 17 for SQL Server'
     print(f"\n{ICONS['info']} Using SQL Server driver: {config['db_driver']}")
-    
-    # Set base directory
-    config['base_dir'] = str(Path(__file__).parent)
     
     return config
 
