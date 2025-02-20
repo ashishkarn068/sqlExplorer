@@ -25,6 +25,7 @@ ICONS = {
     'question': '❓',
     'sparkles': '✨',
     'tools': '🛠️',
+    'input': '📝',
 }
 
 DEFAULT_BASE_DIR = r"C:\git\ApplicationSuite\Source\Metadata"
@@ -161,46 +162,33 @@ def test_db_connection(server, database, driver):
         return False
 
 def get_user_input():
-    print(f"\n{ICONS['sparkles']} === SQL Explorer Project Initialization ===\n{ICONS['sparkles']}")
+    """Get database configuration from user."""
+    print(f"\n{ICONS['info']} SQL Explorer currently supports AxDbRain database system.")
+    print(f"{ICONS['info']} Default database will be 'AxDbRain' if no value is provided.")
     
-    # Get base directory path
-    while True:
-        base_dir = input(f"{ICONS['file']} Enter the base directory path of ApplicationSuite\\Source\\Metadata\n(Press Enter to use default: {DEFAULT_BASE_DIR}): ").strip()
-        
-        # Use default if no input
-        if not base_dir:
-            base_dir = DEFAULT_BASE_DIR
-            print(f"{ICONS['info']} Using default path: {base_dir}")
-        
-        if os.path.exists(base_dir):
-            break
-        print(f"{ICONS['error']} Error: Directory does not exist: {base_dir}")
-        print(f"{ICONS['info']} Please enter a valid path or press Enter to use the default path.")
+    config = {}
     
-    # Get database server name
+    # Get SQL Server name
     while True:
-        server_name = input(f"\n{ICONS['database']} Enter the SQL Server name (e.g., localhost\\SQLEXPRESS): ").strip()
+        server_name = input(f"\n{ICONS['input']} Enter your SQL Server name: ").strip()
         if server_name:
+            config['server_name'] = server_name
             break
-        print(f"{ICONS['error']} Error: Server name cannot be empty.")
+        print(f"{ICONS['error']} Server name cannot be empty. Please try again.")
     
-    # Get database name
-    while True:
-        db_name = input(f"\n{ICONS['database']} Enter the database name: ").strip()
-        if db_name:
-            break
-        print(f"{ICONS['error']} Error: Database name cannot be empty.")
+    # Get database name (default: AxDbRain)
+    db_name = input(f"\n{ICONS['input']} Enter database name (press Enter for 'AxDbRain'): ").strip()
+    config['db_name'] = db_name if db_name else 'AxDbRain'
+    print(f"{ICONS['info']} Using database: {config['db_name']}")
     
-    # Default driver
-    db_driver = "ODBC Driver 17 for SQL Server"
-    print(f"\n{ICONS['info']} Using default SQL Server driver: {db_driver}")
+    # Set the SQL Server driver
+    config['db_driver'] = 'ODBC Driver 17 for SQL Server'
+    print(f"\n{ICONS['info']} Using SQL Server driver: {config['db_driver']}")
     
-    return {
-        'base_dir': base_dir,
-        'server_name': server_name,
-        'db_name': db_name,
-        'db_driver': db_driver
-    }
+    # Set base directory
+    config['base_dir'] = str(Path(__file__).parent)
+    
+    return config
 
 def create_env_file(config):
     """Create .env file with database configuration."""
