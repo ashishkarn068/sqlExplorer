@@ -37,14 +37,45 @@ export default function QueryBuilder({
   const [limit, setLimit] = useState<number>(50);
   const [tableFilterText, setTableFilterText] = useState('');
   const [filteredTables, setFilteredTables] = useState<Table[]>([]);
+  const [groupByColumns, setGroupByColumns] = useState<string[]>([]);
 
   useEffect(() => {
-    if (selectedTable && selectedTable.columns.some(col => col.name.toLowerCase() === 'recid')) {
-      setOrderByColumn('RECID');
-      setOrderDirection('desc');
-    } else {
-      setOrderByColumn('');
-      setOrderDirection('desc');
+    if (selectedTable) {
+      // Reset filters and group by when table changes
+      setFilters([{ column: '', value: '', condition: 'AND' }]);
+      setGroupByColumns([]);
+      
+      // Set default ordering if RECID exists
+      if (selectedTable.columns.some(col => col.name.toLowerCase() === 'recid')) {
+        setOrderByColumn('RECID');
+        setOrderDirection('desc');
+      } else {
+        setOrderByColumn('');
+        setOrderDirection('desc');
+      }
+
+      // Submit query with cleared filters
+      setTimeout(() => {
+        if (selectedTable.columns.some(col => col.name.toLowerCase() === 'recid')) {
+          onTableSelect?.(selectedTable, {
+            tableName: selectedTable.name,
+            filters: [],
+            orderByColumn: 'RECID',
+            orderDirection: 'desc',
+            limit,
+            groupByColumns: []
+          });
+        } else {
+          onTableSelect?.(selectedTable, {
+            tableName: selectedTable.name,
+            filters: [],
+            orderByColumn: '',
+            orderDirection: 'desc',
+            limit,
+            groupByColumns: []
+          });
+        }
+      }, 0);
     }
   }, [selectedTable]);
 
@@ -81,7 +112,8 @@ export default function QueryBuilder({
             filters: filters.filter(f => f.column && f.value),
             orderByColumn: 'RECID',
             orderDirection: 'desc',
-            limit
+            limit,
+            groupByColumns: groupByColumns.length > 0 ? groupByColumns : undefined
           });
         }, 0);
       } else {
@@ -93,7 +125,8 @@ export default function QueryBuilder({
             filters: filters.filter(f => f.column && f.value),
             orderByColumn: '',
             orderDirection: 'desc',
-            limit
+            limit,
+            groupByColumns: groupByColumns.length > 0 ? groupByColumns : undefined
           });
         }, 0);
       }
@@ -131,22 +164,18 @@ export default function QueryBuilder({
   };
 
   const handleSubmit = () => {
-    if (!selectedTable) {
-      alert('Please select a table first');
-      return;
-    }
+    if (!selectedTable) return;
 
-    const validFilters = filters.filter(filter => filter.column && filter.value);
+    const queryParams: QueryParams = {
+      tableName: selectedTable.name,
+      filters: filters.filter(f => f.column && f.value),
+      orderByColumn: orderByColumn || undefined,
+      orderDirection,
+      limit,
+      groupByColumns: groupByColumns.length > 0 ? groupByColumns : undefined
+    };
 
-    if (onQuerySubmit) {
-      onQuerySubmit({
-        tableName: selectedTable.name,
-        filters: validFilters,
-        orderByColumn,
-        orderDirection,
-        limit
-      });
-    }
+    onTableSelect?.(selectedTable, queryParams);
   };
 
   return (
@@ -470,6 +499,78 @@ export default function QueryBuilder({
                 <MenuItem value="desc" sx={{ fontSize: '11px' }}>Descending</MenuItem>
               </Select>
             </FormControl>
+          </Box>
+        </Paper>
+
+        {/* Group By Section */}
+        <Paper 
+          elevation={0} 
+          sx={{ 
+            p: 1.5,
+            width: '100%',
+            bgcolor: 'white',
+            border: '1px solid #e2e8f0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1,
+            mt: 2,
+            mb: 2,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', height: 20 }}>
+            <Typography variant="body2" sx={{ ml: 1, fontSize: 12, fontWeight: 500, color: '#64748b' }}>Group By</Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Autocomplete
+              multiple
+              size="small"
+              options={selectedTable?.columns.map(col => col.name) || []}
+              value={groupByColumns}
+              onChange={(_, newValue) => setGroupByColumns(newValue)}
+              renderOption={(props, option) => (
+                <li {...props} style={{ fontSize: 11 }}>
+                  {option}
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  variant="outlined"
+                  size="small"
+                  placeholder="Select columns to group by"
+                  sx={{ 
+                    '& .MuiInputBase-input': { 
+                      fontSize: 12
+                    },
+                    '& .MuiOutlinedInput-root': {
+                      padding: '2px 8px'
+                    },
+                    '& .MuiChip-root': {
+                      height: 20,
+                      fontSize: 11
+                    }
+                  }}
+                />
+              )}
+              sx={{ 
+                width: '100%',
+                '& .MuiAutocomplete-tag': {
+                  fontSize: 11,
+                  height: 20
+                },
+                '& .MuiAutocomplete-listbox': {
+                  padding: '4px 0',
+                  '& .MuiAutocomplete-option': {
+                    minHeight: 24,
+                    padding: '4px 8px'
+                  }
+                },
+                '& .MuiAutocomplete-popper .MuiAutocomplete-paper': {
+                  fontSize: 11
+                }
+              }}
+            />
           </Box>
         </Paper>
 
