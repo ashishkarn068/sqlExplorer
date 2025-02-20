@@ -14,11 +14,13 @@ import {
   FormControl, 
   Select, 
   MenuItem, 
-  CircularProgress
+  CircularProgress,
+  Backdrop
 } from '@mui/material';
 import { Menu, Database as DatabaseIcon, X as CloseIcon, Code, ChevronDown, Copy, X } from 'lucide-react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
+import { autocompletion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 import LeftPanel from './components/LeftPanel';
 import ResultsGrid from './components/ResultsGrid';
 import { Database, Table, QueryParams, Relation } from './types/database';
@@ -50,6 +52,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<string>('main');
   const [sqlCommandOpen, setSqlCommandOpen] = useState(false);
   const [sqlCommand, setSqlCommand] = useState('');
+  const [databaseLoading, setDatabaseLoading] = useState(false);
 
   useEffect(() => {
     const fetchDatabases = async () => {
@@ -70,7 +73,8 @@ function App() {
     setResults([]);
     setTables([]);
     setIsLoadingTables(true);
-    
+    setDatabaseLoading(true);
+
     try {
       const response = await fetch(`http://localhost:3001/api/tables/${database}`);
       if (!response.ok) {
@@ -88,6 +92,7 @@ function App() {
       setTables([]);
     } finally {
       setIsLoadingTables(false);
+      setDatabaseLoading(false);
     }
   };
 
@@ -109,20 +114,7 @@ function App() {
       setTableData(tableIndexData);
 
       // Construct the query
-      let query = `SELECT TOP ${params.limit} * FROM [${params.tableName}]`;
-
-      // Add WHERE clause if there are filters
-      if (params.filters && params.filters.length > 0) {
-        const validFilters = params.filters.filter(f => f.column && f.value);
-        if (validFilters.length > 0) {
-          query += ' WHERE ' + validFilters.map(f => `[${f.column}] LIKE '%${f.value}%'`).join(' AND ');
-        }
-      }
-
-      // Add ORDER BY clause if specified
-      if (params.orderByColumn) {
-        query += ` ORDER BY [${params.orderByColumn}] ${params.orderDirection}`;
-      }
+      let query = generateQuery(params);
 
       const currentTime = new Date().toLocaleTimeString();
       setSqlCommand(prev => `${prev}\n-- [${currentTime}] Selected table:\n${query}`);
@@ -176,19 +168,7 @@ function App() {
 
     try {
       // Construct the query
-      let query = `SELECT TOP ${params.limit} * FROM [${params.tableName}]`;
-
-      if (params.filters && params.filters.length > 0) {
-        const whereClause = params.filters.map((filter, index) => {
-          const condition = index === 0 ? 'WHERE' : filter.condition;
-          return `${condition} [${filter.column}] = '${filter.value}'`;
-        }).join(' ');
-        query += ` ${whereClause}`;
-      }
-
-      if (params.orderByColumn) {
-        query += ` ORDER BY [${params.orderByColumn}] ${params.orderDirection}`;
-      }
+      let query = generateQuery(params);
 
       const currentTime = new Date().toLocaleTimeString();
       setSqlCommand(prev => `${prev}\n-- [${currentTime}] Generated Query:\n${query}`);
@@ -238,6 +218,60 @@ function App() {
     }
   };
 
+  const generateQuery = (params: QueryParams): string => {
+    const { tableName, filters, orderByColumn, orderDirection, limit, groupByColumns } = params;
+    
+    let query = `SELECT ${limit ? `TOP ${limit} ` : ''}${groupByColumns?.length ? groupByColumns.join(', ') : '*'} FROM ${tableName}`;
+
+    if (filters && filters.length > 0) {
+      const whereClause = filters
+        .map((filter, index) => {
+          const condition = index === 0 ? 'WHERE' : filter.condition;
+          return `${condition} ${filter.column} = '${filter.value}'`;
+        })
+        .join(' ');
+      query += ` ${whereClause}`;
+    }
+
+    if (groupByColumns?.length) {
+      query += ` GROUP BY ${groupByColumns.join(', ')}`;
+    }
+
+    if (orderByColumn) {
+      query += ` ORDER BY ${orderByColumn} ${orderDirection}`;
+    }
+
+    return query;
+  };
+
+  const getTableAndColumnCompletions = (context: CompletionContext): CompletionResult | null => {
+    const word = context.matchBefore(/\w*/);
+    if (!word) return null;
+    
+    if (!word.text) {
+      return {
+        from: word.from,
+        options: tables.map(table => ({
+          label: table.name,
+          type: 'table',
+          detail: 'Table',
+          boost: 1
+        }))
+      };
+    }
+    
+    return {
+      from: word.from,
+      options: tables
+        .filter(table => table.name.toLowerCase().includes(word.text.toLowerCase()))
+        .map(table => ({
+          label: table.name,
+          type: 'table',
+          detail: 'Table',
+          boost: 1
+        }))
+    };
+  };
 
   const handleSqlCommandToggle = () => {
     setSqlCommandOpen(!sqlCommandOpen);
@@ -256,6 +290,23 @@ function App() {
     setActiveTab('main');
 
     try {
+      // Extract table name from query and fetch index information first
+      const tableMatch = sqlCommand.match(/FROM\s+\[?(\w+)\]?/i);
+      if (tableMatch) {
+        const tableName = tableMatch[1];
+        setActiveTableName(tableName);
+        
+        // Fetch index information before executing the query
+        const indexResponse = await fetch(`http://localhost:3001/api/indexed-columns/${tableName}`);
+        const indexData = await indexResponse.json();
+        setIndexedColumns(indexData);
+        
+        const tableIndexResponse = await fetch(`http://localhost:3001/api/table-index/${tableName}`);
+        const tableIndexData = await tableIndexResponse.json();
+        setTableData(tableIndexData);
+      }
+
+      // Now execute the query
       const response = await fetch('http://localhost:3001/api/query', {
         method: 'POST',
         headers: {
@@ -288,12 +339,6 @@ function App() {
       }
 
       setResults(data || []);
-      
-      const tableMatch = sqlCommand.match(/FROM\s+\[?(\w+)\]?/i);
-      setActiveTableName(tableMatch ? tableMatch[1] : '');
-
-      const timestamp = new Date().toLocaleTimeString();
-      setSqlCommand(prev => `${prev}\n-- [${timestamp}] Executed:\n${sqlCommand}`);
 
     } catch (error) {
       console.error('API error:', error);
@@ -419,11 +464,47 @@ function App() {
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
       
+      {/* Loading Overlay */}
+      <Backdrop
+        sx={{
+          color: '#fff',
+          zIndex: 9999,
+          backgroundColor: 'rgba(15, 23, 42, 0.8)',
+          backdropFilter: 'blur(3px)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2
+        }}
+        open={databaseLoading}
+      >
+        <CircularProgress 
+          size={48}
+          thickness={4}
+          sx={{
+            color: '#38bdf8',
+            '& .MuiCircularProgress-circle': {
+              strokeLinecap: 'round',
+            }
+          }}
+        />
+        <Typography
+          variant="body1"
+          sx={{
+            color: '#38bdf8',
+            fontSize: 15,
+            fontWeight: 500,
+            textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }}
+        >
+          Loading Database...
+        </Typography>
+      </Backdrop>
+
       {/* Top Bar */}
-      <Box sx={{ 
-        width: '100%', 
+      <Box sx={{
+        width: '100%',
         height: '48px',
-        bgcolor: '#1e293b',
+        bgcolor: '#0f172a',
         borderBottom: '1px solid #334155',
         display: 'flex',
         alignItems: 'center',
@@ -434,13 +515,35 @@ function App() {
         px: 2
       }}>
         <IconButton 
-          onClick={() => setDrawerOpen(!drawerOpen)}
-          sx={{ color: 'white', p: 1 }}
+          onClick={() => setDrawerOpen(!drawerOpen)} 
+          sx={{ color: '#64748b' }}
         >
           {drawerOpen ? <CloseIcon size={16} /> : <Menu size={16} />}
         </IconButton>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center', ml: 2 }}>
+
+        {/* Centered Title */}
+        <Typography
+          variant="h6"
+          component="div"
+          sx={{
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontSize: 15,
+            fontWeight: 500,
+            color: '#94a3b8',
+            letterSpacing: '0.5px',
+            userSelect: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1
+          }}
+        >
+          <DatabaseIcon size={16} />
+          SQL Explorer
+        </Typography>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', ml: 'auto' }}>
           <DatabaseIcon size={14} className="text-gray-400" />
           <FormControl 
             size="small" 
@@ -448,18 +551,18 @@ function App() {
               ml: 1,
               minWidth: 200,
               '& .MuiOutlinedInput-root': {
-                color: 'white',
-                fontSize: 12,
+                color: '#94a3b8',
+                fontSize: 13,
                 '& fieldset': {
-                  borderColor: '#475569',
+                  borderColor: '#334155',
                 },
                 '&:hover fieldset': {
-                  borderColor: '#64748b',
+                  borderColor: '#475569',
                 },
                 '&.Mui-focused fieldset': {
-                  borderColor: '#64748b',
-                },
-              },
+                  borderColor: '#475569',
+                }
+              }
             }}
           >
             <Select
@@ -543,17 +646,24 @@ function App() {
                 <CodeMirror
                   value={sqlCommand}
                   height="180px"
-                  extensions={[sql()]}
+                  extensions={[
+                    sql(),
+                    autocompletion({ override: [getTableAndColumnCompletions] })
+                  ]}
                   onChange={(value) => setSqlCommand(value)}
                   theme="dark"
                   basicSetup={{
-                    lineNumbers: false,
+                    lineNumbers: true,
                     foldGutter: false,
                     dropCursor: false,
                     allowMultipleSelections: false,
                     indentOnInput: false,
                     highlightActiveLineGutter: false,
                     highlightActiveLine: false,
+                    closeBrackets: false,
+                    autocompletion: true,
+                    syntaxHighlighting: true,
+                    bracketMatching: false,
                   }}
                   style={{
                     fontSize: 13,

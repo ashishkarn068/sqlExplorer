@@ -26,6 +26,7 @@ export interface QueryParams {
   orderDirection?: 'asc' | 'desc';
   limit: number;
   rawQuery?: string;
+  groupByColumns?: string[];
 }
 
 export interface Relation {
