@@ -552,7 +552,7 @@ function App() {
           }}
         >
           <DatabaseIcon size={16} />
-          SQL Explorer
+          SQL Quick
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', ml: 'auto' }}>

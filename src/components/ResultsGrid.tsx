@@ -1,8 +1,9 @@
 import { DataGrid, GridColDef, GridColumnHeaderParams, GridRenderCellParams, useGridApiRef } from '@mui/x-data-grid';
-import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip, Link, IconButton, Backdrop, CircularProgress, FormControl, Select, MenuItem, InputLabel } from '@mui/material';
-import { Table as TableIcon, Copy as CopyIcon } from 'lucide-react';
+import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip, Link, IconButton, Backdrop, CircularProgress, FormControl, Select, MenuItem, InputLabel, Menu, Button } from '@mui/material';
+import { Table as TableIcon, Copy as CopyIcon, FileDown as FileDownIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Relation, RelationData } from '../types/database';
+import * as XLSX from 'xlsx';
 
 interface ResultsGridProps {
   rows: any[];
@@ -43,6 +44,7 @@ export default function ResultsGrid({
   const [relationData, setRelationData] = useState<RelationData | null>(null);
   const [adjustedColumns, setAdjustedColumns] = useState<GridColDef[]>([]);
   const [selectedColumn, setSelectedColumn] = useState<string>('');
+  const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
 
   const toggleHighlight = () => {
     setHighlightEnabled(!highlightEnabled);
@@ -428,6 +430,79 @@ export default function ResultsGrid({
     }
   };
 
+  // Export functions
+  const handleExportMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setExportMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleExportMenuClose = () => {
+    setExportMenuAnchorEl(null);
+  };
+
+  const exportToCSV = () => {
+    handleExportMenuClose();
+    
+    if (safeRows.length === 0) {
+      console.warn('No data to export');
+      return;
+    }
+    
+    // Create CSV content
+    const headers = adjustedColumns.map(col => col.headerName || col.field);
+    const csvContent = [
+      headers.join(','),
+      ...safeRows.map(row => 
+        adjustedColumns.map(col => {
+          const value = row[col.field];
+          // Handle null, undefined, and format values with commas
+          if (value === null || value === undefined) return '';
+          const strValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+          // Escape quotes and wrap in quotes if contains comma
+          return strValue.includes(',') ? `"${strValue.replace(/"/g, '""')}"` : strValue;
+        }).join(',')
+      )
+    ].join('\n');
+    
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${tableName || 'export'}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportToExcel = () => {
+    handleExportMenuClose();
+    
+    if (safeRows.length === 0) {
+      console.warn('No data to export');
+      return;
+    }
+    
+    // Create worksheet data
+    const wsData = [
+      adjustedColumns.map(col => col.headerName || col.field),
+      ...safeRows.map(row => 
+        adjustedColumns.map(col => {
+          const value = row[col.field];
+          if (value === null || value === undefined) return '';
+          return value;
+        })
+      )
+    ];
+    
+    // Create worksheet and workbook
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Data');
+    
+    // Generate and download Excel file
+    XLSX.writeFile(wb, `${tableName || 'export'}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   return (
     <Box sx={{ height: '100%', position: 'relative' }}>
       <Box sx={{ 
@@ -487,6 +562,72 @@ export default function ResultsGrid({
             ))}
           </Select>
         </FormControl>
+        
+        {/* Export Button */}
+        <Tooltip title="Export Data">
+          <Button
+            onClick={handleExportMenuOpen}
+            size="small"
+            variant="outlined"
+            startIcon={<FileDownIcon size={14} />}
+            sx={{
+              fontSize: '0.75rem',
+              py: 0.5,
+              px: 1,
+              minWidth: 'auto',
+              height: '28px',
+              borderColor: '#e0e0e0',
+              color: 'text.secondary',
+              '&:hover': {
+                borderColor: '#bdbdbd',
+                backgroundColor: 'rgba(0, 0, 0, 0.04)'
+              }
+            }}
+            disabled={safeRows.length === 0 || loading}
+          >
+            Export
+          </Button>
+        </Tooltip>
+        
+        {/* Export Menu */}
+        <Menu
+          anchorEl={exportMenuAnchorEl}
+          open={Boolean(exportMenuAnchorEl)}
+          onClose={handleExportMenuClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'center',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'center',
+          }}
+          PaperProps={{
+            sx: {
+              boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+              mt: 0.5,
+              '& .MuiMenuItem-root': {
+                fontSize: '0.75rem',
+                py: 0.75,
+                px: 2
+              }
+            }
+          }}
+        >
+          <MenuItem onClick={exportToCSV}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FileDownIcon size={14} />
+              Export to CSV
+            </Box>
+          </MenuItem>
+          <MenuItem onClick={exportToExcel}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FileDownIcon size={14} />
+              Export to Excel
+            </Box>
+          </MenuItem>
+        </Menu>
+        
         <FormControlLabel
           sx={{ 
             m: 0,
