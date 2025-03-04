@@ -1,4 +1,4 @@
-# 🔍 SQLExplorer
+# 🔍 SQL Quick
 
 A modern SQL Server management and query tool built with React, TypeScript, and Node.js. Designed specifically for AxDbRain database system, it provides an intuitive interface for database exploration and query management.
 
