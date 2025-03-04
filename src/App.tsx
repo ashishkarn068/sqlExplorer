@@ -556,7 +556,6 @@ function App() {
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', ml: 'auto' }}>
-          <DatabaseIcon size={14} className="text-gray-400" />
           <FormControl 
             size="small" 
             sx={{ 
