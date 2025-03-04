@@ -1,8 +1,9 @@
-import { DataGrid, GridColDef, GridColumnHeaderParams, GridRenderCellParams } from '@mui/x-data-grid';
-import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip, Link, IconButton, Backdrop, CircularProgress } from '@mui/material';
-import { Table as TableIcon, Copy as CopyIcon } from 'lucide-react';
+import { DataGrid, GridColDef, GridColumnHeaderParams, GridRenderCellParams, useGridApiRef } from '@mui/x-data-grid';
+import { Paper, Typography, Box, Switch, FormControlLabel, Tooltip, Link, IconButton, Backdrop, CircularProgress, FormControl, Select, MenuItem, InputLabel, Menu, Button } from '@mui/material';
+import { Table as TableIcon, Copy as CopyIcon, FileDown as FileDownIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Relation, RelationData } from '../types/database';
+import * as XLSX from 'xlsx';
 
 interface ResultsGridProps {
   rows: any[];
@@ -36,11 +37,14 @@ export default function ResultsGrid({
   onRelatedTableClick 
 }: ResultsGridProps) {
   const safeRows = Array.isArray(rows) ? rows : [];
+  const apiRef = useGridApiRef();
 
   const [highlightEnabled, setHighlightEnabled] = useState(true);
   const [hideEmptyEnabled, setHideEmptyEnabled] = useState(false);
   const [relationData, setRelationData] = useState<RelationData | null>(null);
   const [adjustedColumns, setAdjustedColumns] = useState<GridColDef[]>([]);
+  const [selectedColumn, setSelectedColumn] = useState<string>('');
+  const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
 
   const toggleHighlight = () => {
     setHighlightEnabled(!highlightEnabled);
@@ -401,49 +405,272 @@ export default function ResultsGrid({
     }
   }, [safeRows, indexedColumns]);
 
+  // Reset column selector and scroll to left when rows or columns change
+  useEffect(() => {
+    setSelectedColumn('');
+    if (apiRef.current) {
+      // Scroll to leftmost column
+      apiRef.current.scrollToIndexes({
+        colIndex: 0,
+      });
+    }
+  }, [rows, columns]);
+
+  const handleColumnSelect = (event: any) => {
+    const columnField = event.target.value;
+    setSelectedColumn(columnField);
+    
+    if (columnField && apiRef.current) {
+      const columnIndex = filteredColumns.findIndex(col => col.field === columnField);
+      if (columnIndex !== -1) {
+        apiRef.current.scrollToIndexes({
+          colIndex: columnIndex,
+        });
+      }
+    }
+  };
+
+  // Export functions
+  const handleExportMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setExportMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleExportMenuClose = () => {
+    setExportMenuAnchorEl(null);
+  };
+
+  const exportToCSV = () => {
+    handleExportMenuClose();
+    
+    if (safeRows.length === 0) {
+      console.warn('No data to export');
+      return;
+    }
+    
+    // Create CSV content
+    const headers = adjustedColumns.map(col => col.headerName || col.field);
+    const csvContent = [
+      headers.join(','),
+      ...safeRows.map(row => 
+        adjustedColumns.map(col => {
+          const value = row[col.field];
+          // Handle null, undefined, and format values with commas
+          if (value === null || value === undefined) return '';
+          const strValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+          // Escape quotes and wrap in quotes if contains comma
+          return strValue.includes(',') ? `"${strValue.replace(/"/g, '""')}"` : strValue;
+        }).join(',')
+      )
+    ].join('\n');
+    
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${tableName || 'export'}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportToExcel = () => {
+    handleExportMenuClose();
+    
+    if (safeRows.length === 0) {
+      console.warn('No data to export');
+      return;
+    }
+    
+    // Create worksheet data
+    const wsData = [
+      adjustedColumns.map(col => col.headerName || col.field),
+      ...safeRows.map(row => 
+        adjustedColumns.map(col => {
+          const value = row[col.field];
+          if (value === null || value === undefined) return '';
+          return value;
+        })
+      )
+    ];
+    
+    // Create worksheet and workbook
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Data');
+    
+    // Generate and download Excel file
+    XLSX.writeFile(wb, `${tableName || 'export'}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   return (
     <Box sx={{ height: '100%', position: 'relative' }}>
-      <style>{styles}</style>
-
       <Box sx={{ 
         display: 'flex', 
         justifyContent: 'flex-end', 
-        gap: 2, 
-        mb: 1,
-        alignItems: 'center'
+        alignItems: 'center', 
+        gap: 2,
+        p: 1,
+        borderBottom: '1px solid #e0e0e0'
       }}>
+        <FormControl 
+          size="small" 
+          sx={{ 
+            minWidth: 150,
+            marginRight: 'auto',
+            '& .MuiInputLabel-root': {
+              fontSize: '11px',
+              color: 'rgba(0, 0, 0, 0.6)',
+              transform: 'translate(14px, 6px) scale(1)'
+            },
+            '& .MuiInputLabel-shrink': {
+              transform: 'translate(14px, -9px) scale(0.75)'
+            },
+            '& .MuiSelect-select': {
+              fontSize: '11px',
+              py: 0.5,
+              height: '15px',
+              lineHeight: '15px'
+            },
+            '& .MuiOutlinedInput-root': {
+              height: '28px'
+            }
+          }}
+        >
+          <InputLabel size="small">Go to Column</InputLabel>
+          <Select
+            value={selectedColumn}
+            onChange={handleColumnSelect}
+            label="Go to Column"
+            size="small"
+            MenuProps={{
+              PaperProps: {
+                sx: {
+                  '& .MuiMenuItem-root': {
+                    fontSize: '10px',
+                    py: 0.25,
+                    minHeight: 'auto'
+                  }
+                }
+              }
+            }}
+          >
+            {filteredColumns.map((col) => (
+              <MenuItem key={col.field} value={col.field}>
+                {col.headerName || col.field}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        
+        {/* Export Button */}
+        <Tooltip title="Export Data">
+          <Button
+            onClick={handleExportMenuOpen}
+            size="small"
+            variant="outlined"
+            startIcon={<FileDownIcon size={14} />}
+            sx={{
+              fontSize: '0.75rem',
+              py: 0.5,
+              px: 1,
+              minWidth: 'auto',
+              height: '28px',
+              borderColor: '#e0e0e0',
+              color: 'text.secondary',
+              '&:hover': {
+                borderColor: '#bdbdbd',
+                backgroundColor: 'rgba(0, 0, 0, 0.04)'
+              }
+            }}
+            disabled={safeRows.length === 0 || loading}
+          >
+            Export
+          </Button>
+        </Tooltip>
+        
+        {/* Export Menu */}
+        <Menu
+          anchorEl={exportMenuAnchorEl}
+          open={Boolean(exportMenuAnchorEl)}
+          onClose={handleExportMenuClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'center',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'center',
+          }}
+          PaperProps={{
+            sx: {
+              boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+              mt: 0.5,
+              '& .MuiMenuItem-root': {
+                fontSize: '0.75rem',
+                py: 0.75,
+                px: 2
+              }
+            }
+          }}
+        >
+          <MenuItem onClick={exportToCSV}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FileDownIcon size={14} />
+              Export to CSV
+            </Box>
+          </MenuItem>
+          <MenuItem onClick={exportToExcel}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FileDownIcon size={14} />
+              Export to Excel
+            </Box>
+          </MenuItem>
+        </Menu>
+        
         <FormControlLabel
-          control={
-            <Switch
-              checked={hideEmptyEnabled}
-              onChange={toggleHideEmpty}
-              size="small"
-            />
-          }
-          label={
-            <Typography variant="body2" sx={{ fontSize: '12px' }}>
-              Hide Empty Columns
-            </Typography>
-          }
+          sx={{ 
+            m: 0,
+            '& .MuiFormControlLabel-label': {
+              fontSize: '0.875rem'
+            }
+          }}
+          control={<Switch 
+            checked={highlightEnabled} 
+            onChange={toggleHighlight}
+            size="small"
+          />}
+          label="Highlight Index"
         />
         <FormControlLabel
-          control={
-            <Switch
-              checked={highlightEnabled}
-              onChange={toggleHighlight}
-              size="small"
-            />
-          }
-          label={
-            <Typography variant="body2" sx={{ fontSize: '12px' }}>
-              Highlight Index
-            </Typography>
-          }
+          sx={{ 
+            m: 0,
+            '& .MuiFormControlLabel-label': {
+              fontSize: '0.875rem'
+            }
+          }}
+          control={<Switch 
+            checked={hideEmptyEnabled} 
+            onChange={toggleHideEmpty}
+            size="small"
+          />}
+          label="Hide Empty Columns"
         />
+        <Tooltip title={loading ? 'Loading...' : ''}>
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              color: 'text.secondary',
+              fontSize: '0.875rem'
+            }}
+          >
+            {safeRows.length} {safeRows.length === 1 ? 'row' : 'rows'}
+          </Typography>
+        </Tooltip>
       </Box>
-
+      <style>{styles}</style>
       <Box sx={{ 
-        height: 'calc(100% - 40px)', 
+        height: 'calc(100% - 48px)',  
         position: 'relative',
         '& .MuiDataGrid-root': {
           border: '1px solid #e2e8f0',
@@ -463,6 +690,7 @@ export default function ResultsGrid({
           <CircularProgress color="inherit" size={40} />
         </Backdrop>
         <DataGrid
+          apiRef={apiRef}
           rows={safeRows}
           columns={adjustedColumns.filter(col => 
             !hideEmptyEnabled || filteredColumns.some(fc => fc.field === col.field)
@@ -471,10 +699,10 @@ export default function ResultsGrid({
           pageSizeOptions={[25, 50, 100]}
           disableRowSelectionOnClick
           getRowId={(row) => row.id || Math.random()}
-          autoHeight={false}
+          loading={loading}
           density="compact"
           initialState={{
-            pagination: { paginationModel: { pageSize: 25 } },
+            pagination: { paginationModel: { pageSize: 50 } },
           }}
           components={{
             NoRowsOverlay: () => (
@@ -505,7 +733,7 @@ export default function ResultsGrid({
           }}
           sx={{
             border: 'none',
-            height: 'calc(100vh - 265px)',
+            height: 'calc(100vh - 200px)',  
             '& .MuiDataGrid-main': {
               overflow: 'auto !important',
               scrollbarWidth: 'thin',
