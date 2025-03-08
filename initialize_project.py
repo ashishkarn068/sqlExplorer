@@ -154,7 +154,7 @@ def test_db_connection(server, database, driver):
             version = cursor.fetchone()[0]
             cursor.close()
             conn.close()
-        print(f"{ICONS['success']} SQL Server version: {version.split('\\n')[0]}")
+        print(f"{ICONS['success']} SQL Server version: {version.split(chr(10))[0]}")
         return True
     except pyodbc.Error as e:
         print(f"\n{ICONS['error']} Error connecting to database:")
